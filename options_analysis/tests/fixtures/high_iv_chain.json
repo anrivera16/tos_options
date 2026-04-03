@@ -1,0 +1,30 @@
+{
+  "snapshot": {
+    "symbol": "SPY",
+    "spot_price": 500.0,
+    "total_gex": 15000000.0,
+    "gamma_flip": 499.0,
+    "atm_iv": 0.28,
+    "rv_20": 0.15,
+    "iv_rank": 85.0,
+    "iv_percentile": 80.0
+  },
+  "dealer_regime": {
+    "gamma_flip_estimate": 499.0,
+    "largest_call_wall": {"strike": 505.0, "call_gex": 12000000.0},
+    "largest_put_wall": {"strike": 495.0, "put_gex": -10000000.0},
+    "top_abs_gex_concentration": 0.68
+  },
+  "by_strike": [
+    {"strike": 499.0, "net_gex": 4000000.0, "call_gex": 6000000.0, "put_gex": -2000000.0, "total_oi": 20000, "total_volume": 15000},
+    {"strike": 500.0, "net_gex": 3500000.0, "call_gex": 5000000.0, "put_gex": -1500000.0, "total_oi": 18000, "total_volume": 12000},
+    {"strike": 505.0, "net_gex": 2500000.0, "call_gex": 4000000.0, "put_gex": -1500000.0, "total_oi": 14000, "total_volume": 10000},
+    {"strike": 495.0, "net_gex": -1500000.0, "call_gex": 1000000.0, "put_gex": -2500000.0, "total_oi": 10000, "total_volume": 8000}
+  ],
+  "by_expiration": [
+    {"expiration_date": "2024-04-05", "dte": 7, "net_gex": 5000000.0, "abs_gex": 8000000.0, "total_oi": 40000, "total_volume": 30000, "atm_iv": 0.30},
+    {"expiration_date": "2024-04-12", "dte": 14, "net_gex": 4000000.0, "abs_gex": 6000000.0, "total_oi": 35000, "total_volume": 25000, "atm_iv": 0.28},
+    {"expiration_date": "2024-04-19", "dte": 21, "net_gex": 2500000.0, "abs_gex": 4000000.0, "total_oi": 25000, "total_volume": 18000, "atm_iv": 0.26},
+    {"expiration_date": "2024-05-17", "dte": 45, "net_gex": 1500000.0, "abs_gex": 2500000.0, "total_oi": 20000, "total_volume": 12000, "atm_iv": 0.24}
+  ]
+}

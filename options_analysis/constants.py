@@ -1,0 +1,51 @@
+REGIME_PINNED = "pinned"
+REGIME_BALANCED = "balanced"
+REGIME_TRANSITION = "transition"
+REGIME_EXPANSION = "expansion"
+REGIME_EXHAUSTION = "exhaustion"
+
+REGIME_NAMES = (
+    REGIME_PINNED,
+    REGIME_BALANCED,
+    REGIME_TRANSITION,
+    REGIME_EXPANSION,
+    REGIME_EXHAUSTION,
+)
+
+REGIME_HYSTERESIS_MARGIN = 0.08
+
+GEX_POSITIVE_MEANS_STABILIZING = True
+
+OPP_LONG_GAMMA = "long_gamma_here"
+OPP_SHORT_GAMMA = "short_gamma_here"
+OPP_LONG_DELTA_CALL = "long_delta_call"
+OPP_LONG_DELTA_PUT = "long_delta_put"
+OPP_VOL_SALE = "vol_sale"
+OPP_VOL_BUY = "vol_buy"
+OPP_PIN_TARGET = "pin_target"
+OPP_BREAKOUT_TRIGGER = "breakout_trigger"
+OPP_CALENDAR_NODE = "calendar_spread_node"
+OPP_CALENDAR_FRONT_LEG = "calendar_front_leg"
+OPP_CALENDAR_BACK_LEG = "calendar_back_leg"
+OPP_PIN_EXPIRY = "pin_expiry"
+OPP_EVENT_PREMIUM = "event_premium"
+OPP_SWING_STRUCTURE = "swing_structure"
+OPP_EXHAUSTION_ZONE = "exhaustion_zone"
+
+OPPORTUNITY_TAGS = (
+    OPP_LONG_GAMMA,
+    OPP_SHORT_GAMMA,
+    OPP_LONG_DELTA_CALL,
+    OPP_LONG_DELTA_PUT,
+    OPP_VOL_SALE,
+    OPP_VOL_BUY,
+    OPP_PIN_TARGET,
+    OPP_BREAKOUT_TRIGGER,
+    OPP_CALENDAR_NODE,
+    OPP_CALENDAR_FRONT_LEG,
+    OPP_CALENDAR_BACK_LEG,
+    OPP_PIN_EXPIRY,
+    OPP_EVENT_PREMIUM,
+    OPP_SWING_STRUCTURE,
+    OPP_EXHAUSTION_ZONE,
+)

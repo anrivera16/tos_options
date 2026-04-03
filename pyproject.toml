@@ -1,0 +1,22 @@
+[project]
+name = "schwab-scripts"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "schwabdev",
+    "python-dotenv",
+    "requests",
+]
+
+[project.scripts]
+gexd = "cli:gexd_main"
+
+[tool.hatch.build.targets.wheel]
+include = [
+    "*.py",
+    "README.md",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

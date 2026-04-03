@@ -1,0 +1,26 @@
+{
+  "snapshot": {
+    "symbol": "SPY",
+    "spot_price": 500.0,
+    "total_gex": 0.0,
+    "gamma_flip": null,
+    "atm_iv": 0.19,
+    "rv_20": null,
+    "iv_rank": null,
+    "iv_percentile": null
+  },
+  "dealer_regime": {
+    "gamma_flip_estimate": null,
+    "largest_call_wall": null,
+    "largest_put_wall": null,
+    "top_abs_gex_concentration": 0.25
+  },
+  "by_strike": [
+    {"strike": 500.0, "net_gex": 0.0, "call_gex": 100000.0, "put_gex": -100000.0, "total_oi": 3000, "total_volume": 2000},
+    {"strike": 505.0, "net_gex": 0.0, "call_gex": 80000.0, "put_gex": -80000.0, "total_oi": 2500, "total_volume": 1800},
+    {"strike": 495.0, "net_gex": 0.0, "call_gex": 60000.0, "put_gex": -60000.0, "total_oi": 2000, "total_volume": 1500}
+  ],
+  "by_expiration": [
+    {"expiration_date": "2024-04-12", "dte": 14, "net_gex": 0.0, "abs_gex": 200000.0, "total_oi": 8000, "total_volume": 5000, "atm_iv": 0.19}
+  ]
+}

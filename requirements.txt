@@ -1,0 +1,3 @@
+schwabdev
+python-dotenv
+requests
