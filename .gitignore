@@ -1,8 +1,15 @@
-.env
+.env*
 .claude/
 resources/
 .DS_Store
 __pycache__/
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hatch/
+.coverage
+*.egg-info/
 out/
 *.pdf
+venv/
+.venv/
