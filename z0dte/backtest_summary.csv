@@ -1,0 +1,5 @@
+Scenario,Entry Cost,Final P&L,Return,Duration,P&L/Hour,Key Driver
+Calendar Spread,$+54.72,$+0.58,+1.1%,24.0h,$+0.02,Term structure normalization
+Butterfly,$-180.91,$-3.75,-2.1%,6.0h,$-0.62,Smile flattening
+Straddle,$+216.31,$-49.72,-23.0%,5.0h,$-9.94,Vol expansion + spot move
+0DTE Theta,$-36.54,$-34.44,-94.3%,1.8h,$-18.78,Theta acceleration
