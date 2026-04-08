@@ -115,6 +115,66 @@ def build_parser() -> argparse.ArgumentParser:
     fetch_parser.add_argument("--persist-db", action="store_true")
     fetch_parser.set_defaults(func=run_fetch_options)
 
+    # 0DTE Live Premium Flow commands
+    from z0dte.backtest.live_runner import LiveRunner
+    
+    def run_zodte_live(args):
+        runner = LiveRunner(
+            symbol=args.symbol,
+            interval_minutes=args.interval,
+            dry_run=args.dry_run,
+        )
+        runner.run_loop(max_iterations=args.count)
+    
+    def run_zodte_snapshot(args):
+        from z0dte.sources.live import LiveDataSource
+        from z0dte.ingestion.pipeline import IngestionPipeline
+        from z0dte.signals.net_premium_flow import NetPremiumFlow
+        from z0dte.db.connection import get_connection
+        
+        conn = get_connection()
+        source = LiveDataSource()
+        pipeline = IngestionPipeline(source, conn, [NetPremiumFlow()])
+        snapshot_id = pipeline.run_one(args.symbol)
+        
+        result = conn.execute(
+            "SELECT * FROM signal_premium_flow WHERE snapshot_id = %s",
+            (snapshot_id,)
+        ).fetchone()
+        
+        if result:
+            direction = "BULLISH" if result["net_premium_flow"] > 0 else "BEARISH"
+            print(f"\n0DTE Premium Flow Snapshot")
+            print(f"=" * 40)
+            print(f"Symbol:     {result['symbol']}")
+            print(f"Time:       {result['captured_at']}")
+            print(f"SPY:        ${result['price_at_bar']:.2f}")
+            print(f"Direction:  {direction}")
+            print(f"Net Flow:  ${result['net_premium_flow']:+,.0f}")
+            print(f"Call Ask:  ${result['call_premium_at_ask']:+,.0f}")
+            print(f"Call Bid:  ${result['call_premium_at_bid']:+,.0f}")
+            print(f"Put Ask:   ${result['put_premium_at_ask']:+,.0f}")
+            print(f"Put Bid:   ${result['put_premium_at_bid']:+,.0f}")
+            print(f"Cumulative:${result['cumulative_flow']:+,.0f}")
+        else:
+            print("No result found")
+    
+    zodte_parser = subparsers.add_parser("zodte", help="0DTE premium flow commands")
+    zodte_subparsers = zodte_parser.add_subparsers(dest="zodte_command", required=True)
+    
+    # Live watch mode
+    zodte_live_parser = zodte_subparsers.add_parser("watch", help="Run live premium flow monitoring")
+    zodte_live_parser.add_argument("--symbol", default="SPY", help="Underlying symbol")
+    zodte_live_parser.add_argument("--interval", type=int, default=15, help="Minutes between API calls (default: 15)")
+    zodte_live_parser.add_argument("--count", type=int, default=None, help="Number of iterations (default: run forever)")
+    zodte_live_parser.add_argument("--dry-run", action="store_true", help="Parse data but skip database writes")
+    zodte_live_parser.set_defaults(func=run_zodte_live)
+    
+    # Single snapshot
+    zodte_snapshot_parser = zodte_subparsers.add_parser("snapshot", help="Fetch single premium flow snapshot")
+    zodte_snapshot_parser.add_argument("--symbol", default="SPY", help="Underlying symbol")
+    zodte_snapshot_parser.set_defaults(func=run_zodte_snapshot)
+
     analysis_parser = subparsers.add_parser("analysis", help="Higher-level analysis commands")
     analysis_subparsers = analysis_parser.add_subparsers(dest="analysis_command", required=True)
 
