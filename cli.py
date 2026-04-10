@@ -11,9 +11,25 @@ from discord.webhook import DiscordWebhookError, send_message, send_png
 from gex import compute_exposure_report, compute_gex
 from options_analysis import build_options_analysis
 from gex.chart import generate_chart
-from gex.storage import DEFAULT_DB_PATH, get_connection, init_db, insert_aggregate_rows, insert_option_contracts, insert_snapshot
-from market_report import MarketReportError, build_market_report, validate_market_report_time
-from schwab.api import get_expirations, get_option_chain, get_option_chain_rows, get_quote
+from gex.storage import (
+    DEFAULT_DB_PATH,
+    get_connection,
+    init_db,
+    insert_aggregate_rows,
+    insert_option_contracts,
+    insert_snapshot,
+)
+from market_report import (
+    MarketReportError,
+    build_market_report,
+    validate_market_report_time,
+)
+from schwab.api import (
+    get_expirations,
+    get_option_chain,
+    get_option_chain_rows,
+    get_quote,
+)
 from schwab.client import SchwabConfigError, build_authorize_url, create_client
 
 
@@ -76,38 +92,60 @@ def build_parser() -> argparse.ArgumentParser:
 
     auth_parser = subparsers.add_parser("auth", help="Authentication commands")
     auth_parser.add_argument("--callback-url", help="OAuth callback URL to exchange")
-    auth_parser.add_argument("--prompt", action="store_true", help="Read callback URL from stdin")
+    auth_parser.add_argument(
+        "--prompt", action="store_true", help="Read callback URL from stdin"
+    )
     auth_parser.set_defaults(func=run_auth)
     auth_subparsers = auth_parser.add_subparsers(dest="auth_command")
 
-    auth_login_parser = auth_subparsers.add_parser("login", help="Print auth URL or exchange callback URL")
-    auth_login_parser.add_argument("--callback-url", help="OAuth callback URL to exchange")
-    auth_login_parser.add_argument("--prompt", action="store_true", help="Read callback URL from stdin")
+    auth_login_parser = auth_subparsers.add_parser(
+        "login", help="Print auth URL or exchange callback URL"
+    )
+    auth_login_parser.add_argument(
+        "--callback-url", help="OAuth callback URL to exchange"
+    )
+    auth_login_parser.add_argument(
+        "--prompt", action="store_true", help="Read callback URL from stdin"
+    )
     auth_login_parser.set_defaults(func=run_auth)
 
     market_parser = subparsers.add_parser("market", help="Market data commands")
-    market_subparsers = market_parser.add_subparsers(dest="market_command", required=True)
+    market_subparsers = market_parser.add_subparsers(
+        dest="market_command", required=True
+    )
 
     quote_parser = market_subparsers.add_parser("quote", help="Fetch a quote")
     quote_parser.add_argument("--symbol", default="SPY")
     quote_parser.set_defaults(func=run_quote)
 
     report_parser = subparsers.add_parser("report", help="Report commands")
-    report_subparsers = report_parser.add_subparsers(dest="report_command", required=True)
+    report_subparsers = report_parser.add_subparsers(
+        dest="report_command", required=True
+    )
 
-    market_report_parser = report_subparsers.add_parser("market", help="Build an hourly market report")
+    market_report_parser = report_subparsers.add_parser(
+        "market", help="Build an hourly market report"
+    )
     market_report_parser.add_argument("--force", action="store_true")
-    market_report_parser.add_argument("--discord", action="store_true", help="Send the report to Discord")
+    market_report_parser.add_argument(
+        "--discord", action="store_true", help="Send the report to Discord"
+    )
     market_report_parser.set_defaults(func=run_market_report)
 
     options_parser = subparsers.add_parser("options", help="Options chain commands")
-    options_subparsers = options_parser.add_subparsers(dest="options_command", required=True)
+    options_subparsers = options_parser.add_subparsers(
+        dest="options_command", required=True
+    )
 
-    expirations_parser = options_subparsers.add_parser("expirations", help="Fetch option expirations")
+    expirations_parser = options_subparsers.add_parser(
+        "expirations", help="Fetch option expirations"
+    )
     expirations_parser.add_argument("--symbol", default="SPY")
     expirations_parser.set_defaults(func=run_expirations)
 
-    fetch_parser = options_subparsers.add_parser("fetch", help="Fetch normalized option rows")
+    fetch_parser = options_subparsers.add_parser(
+        "fetch", help="Fetch normalized option rows"
+    )
     add_option_chain_arguments(fetch_parser)
     fetch_parser.add_argument("--output", default="out/options.csv")
     fetch_parser.add_argument("--json-output", help="Optional raw JSON output path")
@@ -116,8 +154,11 @@ def build_parser() -> argparse.ArgumentParser:
     fetch_parser.set_defaults(func=run_fetch_options)
 
     # 0DTE Live Premium Flow commands
-    from z0dte.backtest.live_runner import LiveRunner
-    
+    try:
+        from z0dte.backtest.live_runner import LiveRunner
+    except ImportError:
+        LiveRunner = None
+
     def run_zodte_live(args):
         runner = LiveRunner(
             symbol=args.symbol,
@@ -125,23 +166,26 @@ def build_parser() -> argparse.ArgumentParser:
             dry_run=args.dry_run,
         )
         runner.run_loop(max_iterations=args.count)
-    
+
     def run_zodte_snapshot(args):
-        from z0dte.sources.live import LiveDataSource
-        from z0dte.ingestion.pipeline import IngestionPipeline
-        from z0dte.signals.net_premium_flow import NetPremiumFlow
-        from z0dte.db.connection import get_connection
-        
+        try:
+            from z0dte.sources.live import LiveDataSource
+            from z0dte.ingestion.pipeline import IngestionPipeline
+            from z0dte.signals.net_premium_flow import NetPremiumFlow
+            from z0dte.db.connection import get_connection
+        except ImportError as e:
+            print(f"Error: Required module not available: {e}")
+            return
+
         conn = get_connection()
         source = LiveDataSource()
         pipeline = IngestionPipeline(source, conn, [NetPremiumFlow()])
         snapshot_id = pipeline.run_one(args.symbol)
-        
+
         result = conn.execute(
-            "SELECT * FROM signal_premium_flow WHERE snapshot_id = %s",
-            (snapshot_id,)
+            "SELECT * FROM signal_premium_flow WHERE snapshot_id = %s", (snapshot_id,)
         ).fetchone()
-        
+
         if result:
             direction = "BULLISH" if result["net_premium_flow"] > 0 else "BEARISH"
             print(f"\n0DTE Premium Flow Snapshot")
@@ -158,42 +202,81 @@ def build_parser() -> argparse.ArgumentParser:
             print(f"Cumulative:${result['cumulative_flow']:+,.0f}")
         else:
             print("No result found")
-    
+
     zodte_parser = subparsers.add_parser("zodte", help="0DTE premium flow commands")
     zodte_subparsers = zodte_parser.add_subparsers(dest="zodte_command", required=True)
-    
+
     # Live watch mode
-    zodte_live_parser = zodte_subparsers.add_parser("watch", help="Run live premium flow monitoring")
+    zodte_live_parser = zodte_subparsers.add_parser(
+        "watch", help="Run live premium flow monitoring"
+    )
     zodte_live_parser.add_argument("--symbol", default="SPY", help="Underlying symbol")
-    zodte_live_parser.add_argument("--interval", type=int, default=15, help="Minutes between API calls (default: 15)")
-    zodte_live_parser.add_argument("--count", type=int, default=None, help="Number of iterations (default: run forever)")
-    zodte_live_parser.add_argument("--dry-run", action="store_true", help="Parse data but skip database writes")
+    zodte_live_parser.add_argument(
+        "--interval",
+        type=int,
+        default=15,
+        help="Minutes between API calls (default: 15)",
+    )
+    zodte_live_parser.add_argument(
+        "--count",
+        type=int,
+        default=None,
+        help="Number of iterations (default: run forever)",
+    )
+    zodte_live_parser.add_argument(
+        "--dry-run", action="store_true", help="Parse data but skip database writes"
+    )
     zodte_live_parser.set_defaults(func=run_zodte_live)
-    
+
     # Single snapshot
-    zodte_snapshot_parser = zodte_subparsers.add_parser("snapshot", help="Fetch single premium flow snapshot")
-    zodte_snapshot_parser.add_argument("--symbol", default="SPY", help="Underlying symbol")
+    zodte_snapshot_parser = zodte_subparsers.add_parser(
+        "snapshot", help="Fetch single premium flow snapshot"
+    )
+    zodte_snapshot_parser.add_argument(
+        "--symbol", default="SPY", help="Underlying symbol"
+    )
     zodte_snapshot_parser.set_defaults(func=run_zodte_snapshot)
 
-    analysis_parser = subparsers.add_parser("analysis", help="Higher-level analysis commands")
-    analysis_subparsers = analysis_parser.add_subparsers(dest="analysis_command", required=True)
+    analysis_parser = subparsers.add_parser(
+        "analysis", help="Higher-level analysis commands"
+    )
+    analysis_subparsers = analysis_parser.add_subparsers(
+        dest="analysis_command", required=True
+    )
 
     options_analysis_parser = analysis_subparsers.add_parser(
         "options",
         help="Run standalone options analysis from option chain rows",
     )
     add_option_chain_arguments(options_analysis_parser)
-    options_analysis_parser.add_argument("--output", help="Optional JSON analysis output path")
-    options_analysis_parser.add_argument("--json-output", help="Optional raw JSON output path")
-    options_analysis_parser.add_argument("--prior-regime", choices=["pinned", "balanced", "transition", "expansion", "exhaustion"])
-    options_analysis_parser.add_argument("--discord", action="store_true", help="Send the analysis summary to Discord")
-    options_analysis_parser.add_argument("--no-discord", action="store_true", help="Skip Discord post for this run")
+    options_analysis_parser.add_argument(
+        "--output", help="Optional JSON analysis output path"
+    )
+    options_analysis_parser.add_argument(
+        "--json-output", help="Optional raw JSON output path"
+    )
+    options_analysis_parser.add_argument(
+        "--prior-regime",
+        choices=["pinned", "balanced", "transition", "expansion", "exhaustion"],
+    )
+    options_analysis_parser.add_argument(
+        "--discord", action="store_true", help="Send the analysis summary to Discord"
+    )
+    options_analysis_parser.add_argument(
+        "--no-discord", action="store_true", help="Skip Discord post for this run"
+    )
     options_analysis_parser.set_defaults(func=run_options_analysis)
 
-    exposure_parser = subparsers.add_parser("exposure", help="Exposure and persistence commands")
-    exposure_subparsers = exposure_parser.add_subparsers(dest="exposure_command", required=True)
+    exposure_parser = subparsers.add_parser(
+        "exposure", help="Exposure and persistence commands"
+    )
+    exposure_subparsers = exposure_parser.add_subparsers(
+        dest="exposure_command", required=True
+    )
 
-    gex_parser = exposure_subparsers.add_parser("gex", help="Compute GEX from option chain rows")
+    gex_parser = exposure_subparsers.add_parser(
+        "gex", help="Compute GEX from option chain rows"
+    )
     add_option_chain_arguments(gex_parser)
     gex_parser.add_argument("--output", help="Optional JSON report output path")
     gex_parser.add_argument("--json-output", help="Optional raw JSON output path")
@@ -201,51 +284,73 @@ def build_parser() -> argparse.ArgumentParser:
     gex_parser.add_argument("--persist-db", action="store_true")
     gex_parser.set_defaults(func=run_gex)
 
-    history_parser = exposure_subparsers.add_parser("history", help="Show recent persisted exposure snapshots")
+    history_parser = exposure_subparsers.add_parser(
+        "history", help="Show recent persisted exposure snapshots"
+    )
     history_parser.add_argument("--symbol", default="SPY")
     history_parser.add_argument("--db-path", default=DEFAULT_DB_PATH)
     history_parser.add_argument("--limit", type=int, default=10)
     history_parser.set_defaults(func=run_gex_history)
 
-    chart_parser = subparsers.add_parser("chart", help="Chart rendering and publishing commands")
+    chart_parser = subparsers.add_parser(
+        "chart", help="Chart rendering and publishing commands"
+    )
     chart_subparsers = chart_parser.add_subparsers(dest="chart_command", required=True)
 
-    chart_render_parser = chart_subparsers.add_parser("render", help="Render hourly price chart with current GEX levels")
+    chart_render_parser = chart_subparsers.add_parser(
+        "render", help="Render hourly price chart with current GEX levels"
+    )
     add_option_chain_arguments(chart_render_parser)
     chart_render_parser.add_argument("--history-days", type=int, default=60)
     chart_render_parser.add_argument("--interval-hours", type=int, default=1)
     chart_render_parser.add_argument("--max-levels", type=int, default=10)
     chart_render_parser.add_argument("--output", default="out/gex_price_overlay.png")
     chart_render_parser.add_argument("--extended-hours", action="store_true")
-    chart_render_parser.add_argument("--discord", action="store_true", help="Upload the rendered PNG to Discord")
+    chart_render_parser.add_argument(
+        "--discord", action="store_true", help="Upload the rendered PNG to Discord"
+    )
     chart_render_parser.set_defaults(func=run_gex_chart)
 
-    chart_post_parser = chart_subparsers.add_parser("post", help="Render a GEX chart and upload it to Discord")
+    chart_post_parser = chart_subparsers.add_parser(
+        "post", help="Render a GEX chart and upload it to Discord"
+    )
     add_option_chain_arguments(chart_post_parser)
     chart_post_parser.add_argument("--history-days", type=int, default=60)
     chart_post_parser.add_argument("--interval-hours", type=int, default=1)
     chart_post_parser.add_argument("--max-levels", type=int, default=10)
     chart_post_parser.add_argument("--output", default="out/gex_price_overlay.png")
     chart_post_parser.add_argument("--extended-hours", action="store_true")
-    chart_post_parser.add_argument("--discord", action="store_true", help="Upload the rendered PNG to Discord")
+    chart_post_parser.add_argument(
+        "--discord", action="store_true", help="Upload the rendered PNG to Discord"
+    )
     chart_post_parser.set_defaults(func=run_gex_chart_discord)
 
-    chart_send_parser = chart_subparsers.add_parser("send", help="Upload a PNG file to a Discord webhook")
+    chart_send_parser = chart_subparsers.add_parser(
+        "send", help="Upload a PNG file to a Discord webhook"
+    )
     chart_send_parser.add_argument("--file", required=True)
     chart_send_parser.set_defaults(func=run_discord_send)
 
-    legacy_fetch_parser = subparsers.add_parser("fetch-options", help="Fetch normalized option rows")
+    legacy_fetch_parser = subparsers.add_parser(
+        "fetch-options", help="Fetch normalized option rows"
+    )
     add_option_chain_arguments(legacy_fetch_parser)
     legacy_fetch_parser.add_argument("--output", default="out/options.csv")
-    legacy_fetch_parser.add_argument("--json-output", help="Optional raw JSON output path")
+    legacy_fetch_parser.add_argument(
+        "--json-output", help="Optional raw JSON output path"
+    )
     legacy_fetch_parser.add_argument("--db-path", default=DEFAULT_DB_PATH)
     legacy_fetch_parser.add_argument("--persist-db", action="store_true")
     legacy_fetch_parser.set_defaults(func=run_fetch_options)
 
-    legacy_gex_parser = subparsers.add_parser("gex", help="Compute GEX from option chain rows")
+    legacy_gex_parser = subparsers.add_parser(
+        "gex", help="Compute GEX from option chain rows"
+    )
     add_option_chain_arguments(legacy_gex_parser)
     legacy_gex_parser.add_argument("--output", help="Optional JSON report output path")
-    legacy_gex_parser.add_argument("--json-output", help="Optional raw JSON output path")
+    legacy_gex_parser.add_argument(
+        "--json-output", help="Optional raw JSON output path"
+    )
     legacy_gex_parser.add_argument("--db-path", default=DEFAULT_DB_PATH)
     legacy_gex_parser.add_argument("--persist-db", action="store_true")
     legacy_gex_parser.set_defaults(func=run_gex)
@@ -255,19 +360,32 @@ def build_parser() -> argparse.ArgumentParser:
         help="Run standalone options analysis from option chain rows",
     )
     add_option_chain_arguments(legacy_options_analysis_parser)
-    legacy_options_analysis_parser.add_argument("--output", help="Optional JSON analysis output path")
-    legacy_options_analysis_parser.add_argument("--json-output", help="Optional raw JSON output path")
-    legacy_options_analysis_parser.add_argument("--prior-regime", choices=["pinned", "balanced", "transition", "expansion", "exhaustion"])
-    legacy_options_analysis_parser.add_argument("--no-discord", action="store_true", help="Skip Discord post for this run")
+    legacy_options_analysis_parser.add_argument(
+        "--output", help="Optional JSON analysis output path"
+    )
+    legacy_options_analysis_parser.add_argument(
+        "--json-output", help="Optional raw JSON output path"
+    )
+    legacy_options_analysis_parser.add_argument(
+        "--prior-regime",
+        choices=["pinned", "balanced", "transition", "expansion", "exhaustion"],
+    )
+    legacy_options_analysis_parser.add_argument(
+        "--no-discord", action="store_true", help="Skip Discord post for this run"
+    )
     legacy_options_analysis_parser.set_defaults(func=run_options_analysis)
 
-    legacy_history_parser = subparsers.add_parser("gex-history", help="Show recent persisted exposure snapshots")
+    legacy_history_parser = subparsers.add_parser(
+        "gex-history", help="Show recent persisted exposure snapshots"
+    )
     legacy_history_parser.add_argument("--symbol", default="SPY")
     legacy_history_parser.add_argument("--db-path", default=DEFAULT_DB_PATH)
     legacy_history_parser.add_argument("--limit", type=int, default=10)
     legacy_history_parser.set_defaults(func=run_gex_history)
 
-    legacy_chart_parser = subparsers.add_parser("gex-chart", help="Render hourly price chart with current GEX levels")
+    legacy_chart_parser = subparsers.add_parser(
+        "gex-chart", help="Render hourly price chart with current GEX levels"
+    )
     add_option_chain_arguments(legacy_chart_parser)
     legacy_chart_parser.add_argument("--history-days", type=int, default=60)
     legacy_chart_parser.add_argument("--interval-hours", type=int, default=1)
@@ -276,7 +394,9 @@ def build_parser() -> argparse.ArgumentParser:
     legacy_chart_parser.add_argument("--extended-hours", action="store_true")
     legacy_chart_parser.set_defaults(func=run_gex_chart)
 
-    legacy_discord_send_parser = subparsers.add_parser("discord-send", help="Upload a PNG file to a Discord webhook")
+    legacy_discord_send_parser = subparsers.add_parser(
+        "discord-send", help="Upload a PNG file to a Discord webhook"
+    )
     legacy_discord_send_parser.add_argument("--file", required=True)
     legacy_discord_send_parser.set_defaults(func=run_discord_send)
 
@@ -288,7 +408,9 @@ def build_parser() -> argparse.ArgumentParser:
     legacy_chart_discord_parser.add_argument("--history-days", type=int, default=60)
     legacy_chart_discord_parser.add_argument("--interval-hours", type=int, default=1)
     legacy_chart_discord_parser.add_argument("--max-levels", type=int, default=10)
-    legacy_chart_discord_parser.add_argument("--output", default="out/gex_price_overlay.png")
+    legacy_chart_discord_parser.add_argument(
+        "--output", default="out/gex_price_overlay.png"
+    )
     legacy_chart_discord_parser.add_argument("--extended-hours", action="store_true")
     legacy_chart_discord_parser.set_defaults(func=run_gex_chart_discord)
 
@@ -303,9 +425,26 @@ def build_parser() -> argparse.ArgumentParser:
     legacy_quote_parser.add_argument("--symbol", default="SPY")
     legacy_quote_parser.set_defaults(func=run_quote)
 
-    legacy_expirations_parser = subparsers.add_parser("expirations", help="Fetch option expirations")
+    legacy_expirations_parser = subparsers.add_parser(
+        "expirations", help="Fetch option expirations"
+    )
     legacy_expirations_parser.add_argument("--symbol", default="SPY")
     legacy_expirations_parser.set_defaults(func=run_expirations)
+
+    calendar_spread_parser = subparsers.add_parser(
+        "calendar-spread", help="Calendar spread scheduler commands"
+    )
+    calendar_spread_subparsers = calendar_spread_parser.add_subparsers(
+        dest="calendar_spread_command", required=True
+    )
+
+    calendar_spread_run_parser = calendar_spread_subparsers.add_parser(
+        "run", help="Run calendar spread scheduler"
+    )
+    calendar_spread_run_parser.add_argument(
+        "--discord", action="store_true", help="Send alerts to Discord webhook"
+    )
+    calendar_spread_run_parser.set_defaults(func=run_calendar_spread)
 
     return parser
 
@@ -341,7 +480,9 @@ def _write_json(path: str | None, payload: Any) -> None:
         return
     output_path = Path(path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    output_path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8"
+    )
 
 
 def _write_csv(path: str, rows: list[dict[str, Any]]) -> None:
@@ -359,7 +500,9 @@ def _write_csv(path: str, rows: list[dict[str, Any]]) -> None:
             writer.writerow({key: row.get(key) for key in fieldnames})
 
 
-def _format_options_analysis_discord_message(symbol: str, analysis: dict[str, Any]) -> str:
+def _format_options_analysis_discord_message(
+    symbol: str, analysis: dict[str, Any]
+) -> str:
     regime = analysis.get("regime", {})
     key_levels = analysis.get("key_levels", {})
     strategies = analysis.get("strategies", [])
@@ -409,7 +552,9 @@ def _format_options_analysis_discord_message(symbol: str, analysis: dict[str, An
         for item in expirations[:1]
     ]
     reason_lines = [f"- {reason}" for reason in regime.get("reasons", [])[:1]]
-    rationale_lines = [f"- {reason}" for reason in trade_suggestion.get("rationale", [])[:2]]
+    rationale_lines = [
+        f"- {reason}" for reason in trade_suggestion.get("rationale", [])[:2]
+    ]
     leg_lines = [
         f"- {leg.get('side', 'n/a')} {leg.get('option_type', 'n/a')} {_fmt_level(leg.get('strike'))} {leg.get('expiration', 'n/a')}"
         for leg in trade_suggestion.get("legs", [])[:2]
@@ -419,8 +564,12 @@ def _format_options_analysis_discord_message(symbol: str, analysis: dict[str, An
     conflicting_tags = trade_suggestion.get("conflicting_tags", [])
     context_limitations = trade_suggestion.get("context_limitations", [])
 
-    supporting_text = f"Supporting: [{', '.join(supporting_tags[:3])}]" if supporting_tags else ""
-    conflicting_text = f"Conflicting: [{', '.join(conflicting_tags[:3])}]" if conflicting_tags else ""
+    supporting_text = (
+        f"Supporting: [{', '.join(supporting_tags[:3])}]" if supporting_tags else ""
+    )
+    conflicting_text = (
+        f"Conflicting: [{', '.join(conflicting_tags[:3])}]" if conflicting_tags else ""
+    )
 
     scenario_lines = []
     if scenarios:
@@ -436,7 +585,9 @@ def _format_options_analysis_discord_message(symbol: str, analysis: dict[str, An
     else:
         context_limit_lines = ["- None noted"]
 
-    gamma_flip_text = f"{gamma_flip:.2f}" if isinstance(gamma_flip, (int, float)) else "n/a"
+    gamma_flip_text = (
+        f"{gamma_flip:.2f}" if isinstance(gamma_flip, (int, float)) else "n/a"
+    )
     top_strike_text = _fmt_level(top_strike)
 
     sections = [
@@ -493,7 +644,9 @@ def _format_options_analysis_discord_message(symbol: str, analysis: dict[str, An
     return "\n".join(sections)
 
 
-def _load_chain_and_rows(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+def _load_chain_and_rows(
+    args: argparse.Namespace,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     from_date, to_date = _resolve_dates(args)
     chain = get_option_chain(
         symbol=args.symbol,
@@ -518,11 +671,20 @@ def _load_chain_and_rows(args: argparse.Namespace) -> tuple[dict[str, Any], list
     return chain, rows
 
 
-def _persist_snapshot(db_path: str, source: str, chain: dict[str, Any], rows: list[dict[str, Any]]) -> int:
+def _persist_snapshot(
+    db_path: str, source: str, chain: dict[str, Any], rows: list[dict[str, Any]]
+) -> int:
     if not rows:
         return 0
     captured_at = str(rows[0].get("snapshot_captured_at") or datetime.now().isoformat())
-    spot = next((float(row["underlying_price"]) for row in rows if row.get("underlying_price") not in (None, "")), None)
+    spot = next(
+        (
+            float(row["underlying_price"])
+            for row in rows
+            if row.get("underlying_price") not in (None, "")
+        ),
+        None,
+    )
     snapshot_symbol = str(
         chain.get("symbol")
         or rows[0].get("underlying_symbol")
@@ -660,6 +822,7 @@ def run_gex(args: argparse.Namespace) -> None:
 
 def run_options_analysis(args: argparse.Namespace) -> None:
     from options_analysis.scenarios import run_scenario_analysis
+
     chain, rows = _load_chain_and_rows(args)
     _write_json(args.json_output, chain)
     report = compute_exposure_report(rows)
@@ -678,9 +841,13 @@ def run_options_analysis(args: argparse.Namespace) -> None:
     else:
         print(payload_text)
 
-    should_send_discord = bool(getattr(args, "discord", False)) or not bool(getattr(args, "no_discord", False))
+    should_send_discord = bool(getattr(args, "discord", False)) or not bool(
+        getattr(args, "no_discord", False)
+    )
     if should_send_discord:
-        send_message(_format_options_analysis_discord_message(payload["symbol"], analysis))
+        send_message(
+            _format_options_analysis_discord_message(payload["symbol"], analysis)
+        )
         print("Posted options analysis to Discord webhook.")
 
 
@@ -768,6 +935,12 @@ def run_market_report(args: argparse.Namespace) -> None:
     if getattr(args, "discord", False):
         send_message(report)
         print("Posted market report to Discord webhook.")
+
+
+def run_calendar_spread(args: argparse.Namespace) -> None:
+    from scripts.calendar_spread_scheduler import start_scheduler
+
+    start_scheduler(send_discord=args.discord)
 
 
 if __name__ == "__main__":

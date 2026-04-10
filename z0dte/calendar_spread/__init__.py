@@ -1,5 +1,8 @@
-from calendar_spread.signals.calendar_spread_violation import CalendarSpreadViolation, find_atm_strike
-from calendar_spread.signals.calendar_spread_opportunity import CalendarSpreadOpportunity, score_violation_severity
+from .signals.calendar_spread_violation import CalendarSpreadViolation, find_atm_strike
+from .signals.calendar_spread_opportunity import (
+    CalendarSpreadOpportunity,
+    score_violation_severity,
+)
 
 __all__ = [
     "CalendarSpreadViolation",
