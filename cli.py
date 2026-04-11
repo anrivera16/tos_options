@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import importlib
 import json
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -203,6 +204,20 @@ def build_parser() -> argparse.ArgumentParser:
         else:
             print("No result found")
 
+    def run_zodte_oi_walls(args):
+        runner_module = importlib.import_module("z0dte.0dte.live.oi_walls_runner")
+        runner = runner_module.OIWallsLiveRunner(
+            symbol=args.symbol,
+            interval_minutes=args.interval,
+            top_n=args.top_n,
+            dry_run=args.dry_run,
+            discord=args.discord,
+            debug=args.debug,
+            persist_db=args.persist_db,
+            db_dedupe_window_min=args.db_dedupe_window_min,
+        )
+        runner.run_loop(max_iterations=args.count)
+
     zodte_parser = subparsers.add_parser("zodte", help="0DTE premium flow commands")
     zodte_subparsers = zodte_parser.add_subparsers(dest="zodte_command", required=True)
 
@@ -236,6 +251,53 @@ def build_parser() -> argparse.ArgumentParser:
         "--symbol", default="SPY", help="Underlying symbol"
     )
     zodte_snapshot_parser.set_defaults(func=run_zodte_snapshot)
+
+    zodte_oi_walls_parser = zodte_subparsers.add_parser(
+        "oi-walls", help="Run live OI walls monitoring"
+    )
+    zodte_oi_walls_parser.add_argument(
+        "--symbol", default="SPY", help="Underlying symbol"
+    )
+    zodte_oi_walls_parser.add_argument(
+        "--interval",
+        type=int,
+        default=15,
+        help="Minutes between API calls (default: 15)",
+    )
+    zodte_oi_walls_parser.add_argument(
+        "--count",
+        type=int,
+        default=None,
+        help="Number of iterations (default: run forever)",
+    )
+    zodte_oi_walls_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Fetch and compute only (no DB writes, no Discord)",
+    )
+    zodte_oi_walls_parser.add_argument(
+        "--discord", action="store_true", help="Send OI wall text alerts to Discord"
+    )
+    zodte_oi_walls_parser.add_argument(
+        "--top-n", type=int, default=3, help="Top call/put walls per side"
+    )
+    zodte_oi_walls_parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Print endpoint/contract parsing diagnostics",
+    )
+    zodte_oi_walls_parser.add_argument(
+        "--persist-db",
+        action="store_true",
+        help="Persist snapshot/contracts/signals to Postgres",
+    )
+    zodte_oi_walls_parser.add_argument(
+        "--db-dedupe-window-min",
+        type=int,
+        default=5,
+        help="DB notification dedupe window in minutes",
+    )
+    zodte_oi_walls_parser.set_defaults(func=run_zodte_oi_walls)
 
     analysis_parser = subparsers.add_parser(
         "analysis", help="Higher-level analysis commands"

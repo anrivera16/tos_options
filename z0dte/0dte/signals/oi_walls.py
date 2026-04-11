@@ -3,7 +3,10 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any
 
-from base import Signal
+try:
+    from .base import Signal
+except ImportError:
+    from base import Signal
 
 
 OI_WALL_FILTERS = {
@@ -23,16 +26,21 @@ def aggregate_oi_by_strike(
     strike_max = underlying_price * (1 + strike_range_pct)
 
     relevant = [
-        c for c in contracts
-        if c.get("dte") is not None and c["dte"] <= max_dte
+        c
+        for c in contracts
+        if c.get("dte") is not None
+        and c["dte"] <= max_dte
         and strike_min <= (c.get("strike") or 0) <= strike_max
-        and c.get("open_interest") is not None and c["open_interest"] > 0
+        and c.get("open_interest") is not None
+        and c["open_interest"] > 0
     ]
 
     by_strike: dict = defaultdict(
         lambda: {
-            "call_oi": 0, "put_oi": 0,
-            "call_volume": 0, "put_volume": 0,
+            "call_oi": 0,
+            "put_oi": 0,
+            "call_volume": 0,
+            "put_volume": 0,
             "total_oi": 0,
         }
     )
@@ -127,7 +135,8 @@ def identify_top_walls(
             "upper_bound": nearest_call["strike"],
             "lower_bound": nearest_put["strike"],
             "width": pin_width,
-            "width_pct": pin_width / ((nearest_call["strike"] + nearest_put["strike"]) / 2),
+            "width_pct": pin_width
+            / ((nearest_call["strike"] + nearest_put["strike"]) / 2),
         }
 
     return {

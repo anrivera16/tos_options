@@ -18,7 +18,11 @@ def test_run_gex_persist_db_writes_report_and_snapshot(
     db_path = tmp_path / "options_history.sqlite3"
     output_path = tmp_path / "gex_report.json"
 
-    monkeypatch.setattr(cli, "_load_chain_and_rows", lambda args: (option_chain_fixture, option_rows_fixture))
+    monkeypatch.setattr(
+        cli,
+        "_load_chain_and_rows",
+        lambda args: (option_chain_fixture, option_rows_fixture),
+    )
 
     args = argparse.Namespace(
         symbol="SPY",
@@ -32,10 +36,22 @@ def test_run_gex_persist_db_writes_report_and_snapshot(
     cli.run_gex(args)
 
     payload = json.loads(output_path.read_text(encoding="utf-8"))
-    assert set(payload) >= {"snapshot", "by_strike", "by_expiration", "by_dte_bucket", "by_bucket", "dealer_regime", "headline_gex", "snapshot_id"}
+    assert set(payload) >= {
+        "snapshot",
+        "by_strike",
+        "by_expiration",
+        "by_dte_bucket",
+        "by_bucket",
+        "dealer_regime",
+        "headline_gex",
+        "snapshot_id",
+    }
     assert payload["snapshot"]["spot_price"] == 500.0
     assert payload["headline_gex"]["total_gex"] == payload["snapshot"]["total_gex"]
-    assert payload["dealer_regime"]["gamma_flip_estimate"] is None or 490.0 < payload["dealer_regime"]["gamma_flip_estimate"] < 510.0
+    assert (
+        payload["dealer_regime"]["gamma_flip_estimate"] is None
+        or 490.0 < payload["dealer_regime"]["gamma_flip_estimate"] < 510.0
+    )
     assert "options_analysis" not in payload
 
     connection = sqlite3.connect(db_path)
@@ -46,12 +62,35 @@ def test_run_gex_persist_db_writes_report_and_snapshot(
                 "SELECT name FROM sqlite_master WHERE type='table'"
             ).fetchall()
         }
-        assert {"snapshots", "option_contracts", "aggregates_by_strike", "aggregates_by_expiry", "aggregates_by_bucket"}.issubset(tables)
+        assert {
+            "snapshots",
+            "option_contracts",
+            "aggregates_by_strike",
+            "aggregates_by_expiry",
+            "aggregates_by_bucket",
+        }.issubset(tables)
         assert connection.execute("SELECT COUNT(*) FROM snapshots").fetchone()[0] == 1
-        assert connection.execute("SELECT COUNT(*) FROM option_contracts").fetchone()[0] == len(option_rows_fixture)
-        assert connection.execute("SELECT COUNT(*) FROM aggregates_by_strike").fetchone()[0] > 0
-        assert connection.execute("SELECT COUNT(*) FROM aggregates_by_expiry").fetchone()[0] > 0
-        assert connection.execute("SELECT COUNT(*) FROM aggregates_by_bucket").fetchone()[0] > 0
+        assert connection.execute("SELECT COUNT(*) FROM option_contracts").fetchone()[
+            0
+        ] == len(option_rows_fixture)
+        assert (
+            connection.execute("SELECT COUNT(*) FROM aggregates_by_strike").fetchone()[
+                0
+            ]
+            > 0
+        )
+        assert (
+            connection.execute("SELECT COUNT(*) FROM aggregates_by_expiry").fetchone()[
+                0
+            ]
+            > 0
+        )
+        assert (
+            connection.execute("SELECT COUNT(*) FROM aggregates_by_bucket").fetchone()[
+                0
+            ]
+            > 0
+        )
     finally:
         connection.close()
 
@@ -66,7 +105,9 @@ def test_persisted_snapshot_symbol_uses_chain_symbol_for_history(
     db_path = tmp_path / "history.sqlite3"
     rows = [dict(row, underlying_symbol="SPX") for row in option_rows_fixture]
 
-    monkeypatch.setattr(cli, "_load_chain_and_rows", lambda args: (option_chain_fixture, rows))
+    monkeypatch.setattr(
+        cli, "_load_chain_and_rows", lambda args: (option_chain_fixture, rows)
+    )
 
     cli.run_gex(
         argparse.Namespace(
@@ -131,7 +172,9 @@ def test_run_market_report_discord_posts_message(
     calls: list[str] = []
 
     monkeypatch.setattr(cli, "validate_market_report_time", lambda force: None)
-    monkeypatch.setattr(cli, "build_market_report", lambda: "Market Update - 10:30 AM CT")
+    monkeypatch.setattr(
+        cli, "build_market_report", lambda: "Market Update - 10:30 AM CT"
+    )
     monkeypatch.setattr(cli, "send_message", lambda content: calls.append(content))
 
     cli.run_market_report_discord(argparse.Namespace(force=False))
@@ -171,7 +214,11 @@ def test_run_options_analysis_writes_standalone_payload(
     output_path = tmp_path / "options_analysis.json"
     calls: list[str] = []
 
-    monkeypatch.setattr(cli, "_load_chain_and_rows", lambda args: (option_chain_fixture, option_rows_fixture))
+    monkeypatch.setattr(
+        cli,
+        "_load_chain_and_rows",
+        lambda args: (option_chain_fixture, option_rows_fixture),
+    )
     monkeypatch.setattr(cli, "send_message", lambda content: calls.append(content))
 
     cli.run_options_analysis(
@@ -201,7 +248,10 @@ def test_run_options_analysis_writes_standalone_payload(
     assert "Why this trade:" in calls[0]
     assert "Quality:" in calls[0]
     assert payload["options_analysis"]["trade_suggestion"]["strategy"]
-    assert payload["options_analysis"]["trade_suggestion"]["probability_type"] == "POP estimate"
+    assert (
+        payload["options_analysis"]["trade_suggestion"]["probability_type"]
+        == "POP estimate"
+    )
 
 
 def test_run_options_analysis_can_skip_discord(
@@ -212,7 +262,11 @@ def test_run_options_analysis_can_skip_discord(
 ) -> None:
     calls: list[str] = []
 
-    monkeypatch.setattr(cli, "_load_chain_and_rows", lambda args: (option_chain_fixture, option_rows_fixture))
+    monkeypatch.setattr(
+        cli,
+        "_load_chain_and_rows",
+        lambda args: (option_chain_fixture, option_rows_fixture),
+    )
     monkeypatch.setattr(cli, "send_message", lambda content: calls.append(content))
 
     cli.run_options_analysis(
@@ -234,7 +288,16 @@ def test_run_options_analysis_can_skip_discord(
 def test_build_parser_includes_options_analysis_command() -> None:
     parser = cli.build_parser()
 
-    args = parser.parse_args(["options-analysis", "--symbol", "SPY", "--prior-regime", "transition", "--no-discord"])
+    args = parser.parse_args(
+        [
+            "options-analysis",
+            "--symbol",
+            "SPY",
+            "--prior-regime",
+            "transition",
+            "--no-discord",
+        ]
+    )
 
     assert args.command == "options-analysis"
     assert args.symbol == "SPY"
@@ -246,7 +309,17 @@ def test_build_parser_includes_options_analysis_command() -> None:
 def test_build_parser_includes_grouped_options_analysis_command() -> None:
     parser = cli.build_parser()
 
-    args = parser.parse_args(["analysis", "options", "--symbol", "SPY", "--prior-regime", "transition", "--discord"])
+    args = parser.parse_args(
+        [
+            "analysis",
+            "options",
+            "--symbol",
+            "SPY",
+            "--prior-regime",
+            "transition",
+            "--discord",
+        ]
+    )
 
     assert args.command == "analysis"
     assert args.analysis_command == "options"
@@ -275,7 +348,9 @@ def test_run_market_report_prints_and_optionally_posts_to_discord(
     calls: list[str] = []
 
     monkeypatch.setattr(cli, "validate_market_report_time", lambda force: None)
-    monkeypatch.setattr(cli, "build_market_report", lambda: "Market Update - 10:30 AM CT")
+    monkeypatch.setattr(
+        cli, "build_market_report", lambda: "Market Update - 10:30 AM CT"
+    )
     monkeypatch.setattr(cli, "send_message", lambda content: calls.append(content))
 
     cli.run_market_report(argparse.Namespace(force=False, discord=True))
@@ -286,7 +361,9 @@ def test_run_market_report_prints_and_optionally_posts_to_discord(
     assert calls == ["Market Update - 10:30 AM CT"]
 
 
-def test_run_gex_chart_can_upload_with_discord_flag(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+def test_run_gex_chart_can_upload_with_discord_flag(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     uploads: list[str] = []
 
     monkeypatch.setattr(
@@ -334,7 +411,11 @@ def test_run_options_analysis_default_and_no_discord_emit_same_payload(
 ) -> None:
     calls: list[str] = []
 
-    monkeypatch.setattr(cli, "_load_chain_and_rows", lambda args: (option_chain_fixture, option_rows_fixture))
+    monkeypatch.setattr(
+        cli,
+        "_load_chain_and_rows",
+        lambda args: (option_chain_fixture, option_rows_fixture),
+    )
     monkeypatch.setattr(cli, "send_message", lambda content: calls.append(content))
 
     cli.run_options_analysis(
@@ -361,8 +442,48 @@ def test_run_options_analysis_default_and_no_discord_emit_same_payload(
     )
     local_output = capsys.readouterr().out
 
-    default_payload = json.loads(default_output.split("\nPosted options analysis to Discord webhook.\n", 1)[0])
+    default_payload = json.loads(
+        default_output.split("\nPosted options analysis to Discord webhook.\n", 1)[0]
+    )
     local_payload = json.loads(local_output)
 
     assert calls
     assert default_payload == local_payload
+
+
+def test_build_parser_includes_grouped_zodte_oi_walls_command() -> None:
+    parser = cli.build_parser()
+
+    args = parser.parse_args(
+        [
+            "zodte",
+            "oi-walls",
+            "--symbol",
+            "SPY",
+            "--interval",
+            "5",
+            "--count",
+            "2",
+            "--dry-run",
+            "--discord",
+            "--top-n",
+            "4",
+            "--debug",
+            "--persist-db",
+            "--db-dedupe-window-min",
+            "7",
+        ]
+    )
+
+    assert args.command == "zodte"
+    assert args.zodte_command == "oi-walls"
+    assert args.symbol == "SPY"
+    assert args.interval == 5
+    assert args.count == 2
+    assert args.dry_run is True
+    assert args.discord is True
+    assert args.top_n == 4
+    assert args.debug is True
+    assert args.persist_db is True
+    assert args.db_dedupe_window_min == 7
+    assert args.func.__name__ == "run_zodte_oi_walls"

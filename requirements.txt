@@ -1,3 +1,4 @@
 schwabdev
 python-dotenv
 requests
+boto3

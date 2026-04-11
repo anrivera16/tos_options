@@ -4,10 +4,15 @@ from typing import Any
 
 from gex.calculations import CONTRACT_MULTIPLIER
 
-from base import Signal
+try:
+    from .base import Signal
+except ImportError:
+    from base import Signal
 
 
-def classify_trade_side(bid: float | None, ask: float | None, last: float | None) -> str:
+def classify_trade_side(
+    bid: float | None, ask: float | None, last: float | None
+) -> str:
     if bid is None or ask is None or last is None:
         return "unknown"
     mid = (bid + ask) / 2
@@ -62,7 +67,9 @@ def compute_premium_flow(contracts: list[dict], underlying_price: float) -> dict
     }
 
 
-def compute_cumulative_flow(snapshot_id: int, db_conn: Any, symbol: str, captured_at: Any) -> float:
+def compute_cumulative_flow(
+    snapshot_id: int, db_conn: Any, symbol: str, captured_at: Any
+) -> float:
     result = db_conn.execute(
         """
         SELECT COALESCE(SUM(spf.net_premium_flow), 0) as cumulative
@@ -77,7 +84,9 @@ def compute_cumulative_flow(snapshot_id: int, db_conn: Any, symbol: str, capture
     return float(result["cumulative"]) if result else 0.0
 
 
-def compute_flow_velocity(current_flow: float, prior_flow: float | None) -> float | None:
+def compute_flow_velocity(
+    current_flow: float, prior_flow: float | None
+) -> float | None:
     if prior_flow is None:
         return None
     return current_flow - prior_flow
@@ -100,15 +109,37 @@ def detect_divergence(
     flow_significant = abs(first.get("cumulative_flow", 1)) * 0.1
 
     if abs(price_change_pct) < price_flat_threshold and flow_change > flow_significant:
-        return {"divergence": "bullish", "flow_delta": flow_change, "price_delta_pct": price_change_pct}
-    elif abs(price_change_pct) < price_flat_threshold and flow_change < -flow_significant:
-        return {"divergence": "bearish", "flow_delta": flow_change, "price_delta_pct": price_change_pct}
+        return {
+            "divergence": "bullish",
+            "flow_delta": flow_change,
+            "price_delta_pct": price_change_pct,
+        }
+    elif (
+        abs(price_change_pct) < price_flat_threshold and flow_change < -flow_significant
+    ):
+        return {
+            "divergence": "bearish",
+            "flow_delta": flow_change,
+            "price_delta_pct": price_change_pct,
+        }
     elif price_change_pct > price_flat_threshold and flow_change < -flow_significant:
-        return {"divergence": "bearish", "flow_delta": flow_change, "price_delta_pct": price_change_pct}
+        return {
+            "divergence": "bearish",
+            "flow_delta": flow_change,
+            "price_delta_pct": price_change_pct,
+        }
     elif price_change_pct < -price_flat_threshold and flow_change > flow_significant:
-        return {"divergence": "bullish", "flow_delta": flow_change, "price_delta_pct": price_change_pct}
+        return {
+            "divergence": "bullish",
+            "flow_delta": flow_change,
+            "price_delta_pct": price_change_pct,
+        }
     else:
-        return {"divergence": "none", "flow_delta": flow_change, "price_delta_pct": price_change_pct}
+        return {
+            "divergence": "none",
+            "flow_delta": flow_change,
+            "price_delta_pct": price_change_pct,
+        }
 
 
 def _get_prior_bar_flow(snapshot: dict, db_conn: Any) -> float | None:

@@ -4,7 +4,10 @@ from typing import Any
 
 from gex.calculations import CONTRACT_MULTIPLIER
 
-from base import Signal
+try:
+    from .base import Signal
+except ImportError:
+    from base import Signal
 
 
 def compute_bar_gex(
@@ -34,7 +37,7 @@ def compute_bar_gex(
         side = 1.0 if str(c.get("put_call") or "").upper() == "CALL" else -1.0
         oi = c.get("open_interest") or 0
         gamma = c.get("gamma") or 0
-        gex = side * gamma * oi * CONTRACT_MULTIPLIER * (underlying_price ** 2)
+        gex = side * gamma * oi * CONTRACT_MULTIPLIER * (underlying_price**2)
         total_gex += gex
 
         distance = abs((c.get("strike") or 0) - underlying_price)
@@ -51,7 +54,7 @@ def compute_bar_gex(
             * (c.get("gamma") or 0)
             * (c.get("open_interest") or 0)
             * CONTRACT_MULTIPLIER
-            * (underlying_price ** 2)
+            * (underlying_price**2)
             for c in atm_contracts
         )
 
@@ -157,7 +160,9 @@ class GammaDecayRate(Signal):
         )
         db_conn.commit()
 
-    def _get_prior_bars(self, snapshot: dict, db_conn: Any, limit: int = 2) -> list[dict]:
+    def _get_prior_bars(
+        self, snapshot: dict, db_conn: Any, limit: int = 2
+    ) -> list[dict]:
         results = db_conn.execute(
             """
             SELECT sgd.total_gex, sgd.gex_delta, sgd.gex_acceleration
