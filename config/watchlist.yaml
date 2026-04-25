@@ -1,0 +1,146 @@
+# Universe Watchlist Configuration
+#
+# Static watchlist of stocks to evaluate daily for options trading.
+# These are pre-filtered for: optionable, liquid, and relevant to the
+# user's trading style (credit spreads on high-IV names).
+
+# Always-index tickers (scraped every cycle regardless of score)
+indexes:
+  - $SPX
+  - SPY
+  - QQQ
+
+# Tier 1: High-conviction names -- always evaluated, likely scraped
+# if they score well.  These are the "usual suspects" with liquid
+# option chains and frequent IV opportunities.
+tier1:
+  # MAG7
+  - AAPL
+  - AMZN
+  - GOOG
+  - GOOGL
+  - META
+  - MSFT
+  - NVDA
+  - TSLA
+
+  # High-beta / high-IV tech
+  - AMD
+  - NFLX
+  - CRM
+  - UBER
+  - PLTR
+  - COIN
+  - MSTR
+
+# Tier 2: Broader watchlist -- evaluated but only scraped if they
+# score above the threshold (unusual volume, IV spike, etc.)
+tier2:
+  # Semis
+  - AVGO
+  - MRVL
+  - ON
+  - MPWR
+  - INTC
+  # Financials
+  - JPM
+  - GS
+  - HOOD
+  - SOFI
+  # Energy / Uranium
+  - XOM
+  - CVX
+  - CCJ
+  - OKLO
+  - SMR
+  # Consumer
+  - AMZN
+  - COST
+  - WMT
+  - TGT
+  - HD
+  - LOW
+  - LULU
+  - NKE
+  - SBUX
+  - CMG
+  - MCD
+  # Pharma / Biotech
+  - PFE
+  - MRK
+  - LLY
+  - ABBV
+  # EV / Auto
+  - F
+  - GM
+  - RIVN
+  - LCID
+  - NIO
+  # Crypto-adjacent
+  - MARA
+  - RIOT
+  # Small/mid cap momentum
+  - RKLB
+  - LUNR
+  - IONQ
+  - QBTS
+  - SOUN
+  - ASTS
+  - NNE
+  - PATH
+  - AI
+  - RBLX
+  - ABNB
+  - CHWY
+  - ETSY
+  - TTD
+  - SNAP
+  - PINS
+  # Cyber / SaaS
+  - CRWD
+  - PANW
+  - ZS
+  - DDOG
+  - MDB
+  - NET
+  - SNOW
+  - VEEV
+  # Solar / Clean energy
+  - ENPH
+  - SEDG
+  - FSLR
+  - RUN
+
+# Movers sources -- auto-discover high-activity names each morning
+# Valid: $SPX, $DJI, $COMPX, NASDAQ, NYSE, EQUITY_ALL
+movers_sources:
+  - symbol: "$SPX"
+    sort: "volume"         # top volume movers in S&P 500
+    limit: 15
+  - symbol: "NASDAQ"
+    sort: "percent_up"     # biggest gainers on Nasdaq
+    limit: 10
+
+# Scoring weights (tune these to change selection behavior)
+scoring:
+  # Relative volume vs 10-day avg (0-3 points)
+  rel_volume_weight: 3.0
+  # Absolute daily volume in millions (0-2 points)
+  abs_volume_weight: 2.0
+  # Proximity to 52-week extremes (0-2 points)
+  range_position_weight: 2.0
+  # Price move magnitude today (0-2 points)
+  daily_move_weight: 2.0
+  # Mover bonus: appeared in top movers list (0-1 points)
+  mover_bonus: 1.0
+
+# Thresholds
+thresholds:
+  # Minimum score to be selected for scraping
+  min_score: 4.0
+  # Maximum number of individual names to scrape per cycle
+  max_names: 8
+  # Minimum average 10-day volume (shares) to be considered
+  min_avg_volume: 1000000
+  # Must be optionable
+  require_optionable: true
