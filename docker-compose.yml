@@ -1,0 +1,199 @@
+services:
+  # ============================================================
+  #  OPTIONS SCANNER + POSITION TRACKER
+  #  
+  #  Usage:
+  #    docker compose up -d db                    # start postgres
+  #    docker compose run --rm scraper            # single scrape
+  #    docker compose up scraper-watch            # continuous scraper
+  #    docker compose up scanner-watch            # continuous scanner (5 min)
+  #    docker compose run --rm cli auth --prompt  # initial auth
+  # ============================================================
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: options
+      POSTGRES_USER: trader
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    ports:
+      - "5433:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trader -d options"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Scrapes option chains from Schwab API into Postgres every 5 min
+  scraper-watch:
+    build: .
+    entrypoint: ["python"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://trader:${POSTGRES_PASSWORD:-changeme}@db:5432/options
+    volumes:
+      - ${SCHWAB_TOKEN_DIR:-~/.schwabdev}:/root/.schwabdev
+      - .:/app
+    command:
+      - scripts/options_scraper.py
+      - --tickers
+      - $$SPX
+      - SPY
+      - QQQ
+      - --interval
+      - "5"
+      - --db
+      - postgresql://trader:${POSTGRES_PASSWORD:-changeme}@db:5432/options
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Runs scanner every 5 min, reads latest snapshot from DB, alerts to Discord
+  scanner-watch:
+    build: .
+    entrypoint: ["python"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://trader:${POSTGRES_PASSWORD:-changeme}@db:5432/options
+    volumes:
+      - ${SCHWAB_TOKEN_DIR:-~/.schwabdev}:/root/.schwabdev
+      - .:/app
+    command:
+      - scripts/live_scanner.py
+      - --interval
+      - "5"
+      - --discord
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # One-shot scraper
+  scraper:
+    build: .
+    entrypoint: ["python"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://trader:${POSTGRES_PASSWORD:-changeme}@db:5432/options
+    volumes:
+      - ${SCHWAB_TOKEN_DIR:-~/.schwabdev}:/root/.schwabdev
+      - .:/app
+    command:
+      - scripts/options_scraper.py
+      - --once
+      - --tickers
+      - $$SPX
+      - SPY
+      - QQQ
+      - --db
+      - postgresql://trader:${POSTGRES_PASSWORD:-changeme}@db:5432/options
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # One-off commands via: docker compose run --rm cli <subcommand>
+  # Uses default ENTRYPOINT ["python", "cli.py"]
+  cli:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://trader:${POSTGRES_PASSWORD:-changeme}@db:5432/options
+    volumes:
+      - ${SCHWAB_TOKEN_DIR:-~/.schwabdev}:/root/.schwabdev
+      - .:/app
+    command: ["--help"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  positions:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://trader:${POSTGRES_PASSWORD:-changeme}@db:5432/options
+    volumes:
+      - ${SCHWAB_TOKEN_DIR:-~/.schwabdev}:/root/.schwabdev
+      - .:/app
+    command: ["positions", "show"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  journal:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://trader:${POSTGRES_PASSWORD:-changeme}@db:5432/options
+    volumes:
+      - ${SCHWAB_TOKEN_DIR:-~/.schwabdev}:/root/.schwabdev
+      - .:/app
+    command: ["journal", "list"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Scans for spread opportunities every 15 min, alerts to Discord
+  spread-hunter:
+    build: .
+    entrypoint: ["python"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://trader:${POSTGRES_PASSWORD:-changeme}@db:5432/options
+    volumes:
+      - ${SCHWAB_TOKEN_DIR:-~/.schwabdev}:/root/.schwabdev
+      - .:/app
+    command:
+      - scripts/spread_hunter.py
+      - --interval
+      - "15"
+      - --discord
+      - --delta-min
+      - "0.10"
+      - --delta-max
+      - "0.25"
+      - --sig-min-oi
+      - "100"
+      - --sig-min-volume
+      - "50"
+      - --iv-rank-min
+      - "30"
+      - --sig-dte-min
+      - "5"
+      - --sig-dte-max
+      - "9"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Universe scanner: discovers and ranks individual stocks daily
+  # Runs pre-market (9:15 AM) + every 30 min during market hours
+  universe-scanner:
+    build: .
+    entrypoint: ["python"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://trader:${POSTGRES_PASSWORD:-changeme}@db:5432/options
+    volumes:
+      - ${SCHWAB_TOKEN_DIR:-~/.schwabdev}:/root/.schwabdev
+      - .:/app
+    command:
+      - scripts/universe_scanner.py
+      - --schedule
+      - --save
+      - --interval
+      - "30"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  schwab_tokens:
+    # Persists OAuth tokens — CRITICAL: don't delete this
+  pg_data:
+    # Persists Postgres data — all option chain data + trade journal

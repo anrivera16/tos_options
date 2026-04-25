@@ -1,9 +1,13 @@
-.env*
+# Env / secrets
+.env
+
+# IDE / tooling
 .claude/
-resources/
-outputs/
-research/
-.DS_Store
+.vscode/
+.idea/
+.hermes/
+
+# Python
 __pycache__/
 .pytest_cache/
 .mypy_cache/
@@ -11,7 +15,36 @@ __pycache__/
 .hatch/
 .coverage
 *.egg-info/
-out/
-*.pdf
+*.pyc
 venv/
 .venv/
+
+# macOS / Windows
+.DS_Store
+Thumbs.db
+
+# Large data files (keep local only)
+data/
+options-backtest/raw/
+options-backtest/parquet/
+*.csv
+*.csv.gz
+*.parquet
+*.dbn
+*.dbn.zst
+*.sqlite
+*.db
+
+# Generated output
+out/
+outputs/
+trade_log.txt
+backtest_results.csv
+
+# Resources (books, PDFs, research papers)
+resources/
+research/
+*.pdf
+
+# Exploration / archive
+s3_test/

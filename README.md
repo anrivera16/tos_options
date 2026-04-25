@@ -1,425 +1,180 @@
-# Schwab Scripts
+# Options Strategies for the US Stock Market
 
-This directory contains Python scripts and CLI commands for:
+A brief overview of options strategies drawn from academic research (arXiv) and standard practitioner literature.
 
-- authenticating with the Schwab API
-- fetching quotes and option-chain data
-- computing gamma exposure (GEX)
-- computing expanded dealer exposure analytics (GEX, DEX, VEX, TEX)
-- persisting option snapshots to SQLite for historical analysis
-- generating GEX overlay charts
-- uploading finished PNG charts to Discord
-- posting hourly text market reports to Discord
+---
 
-## What This Folder Does
+## 1. Covered Call
 
-The main workflow is:
+**Type:** Income generation
+**Outlook:** Neutral to mildly bullish
 
-1. read Schwab credentials from `.env`
-2. call the Schwab API
-3. normalize option data
-4. compute exposure reports and GEX levels
-5. render a chart to `out/`
-6. optionally upload the PNG to Discord
+You own 100 shares of the underlying stock and sell (write) one call option against them. You collect the premium upfront. If the stock stays below the strike at expiration, you keep the premium and your shares. If it rises above the strike, your shares get called away at the strike price.
 
-The fastest daily command is `gexd`, which creates the chart and posts it to Discord in one step.
+- **Max profit:** Premium received + (strike - stock purchase price)
+- **Max loss:** Stock purchase price - premium received (if stock goes to zero)
+- **Risk profile:** Reduces cost basis, caps upside
 
-## Files In This Folder
+---
 
-Important files:
+## 2. Protective Put
 
-- `cli.py` - main command-line entry point
-- `schwab_client.py` - Schwab auth and client creation
-- `schwab_api.py` - quote and option-chain API helpers
-- `gex.py` - GEX, DEX, VEX, TEX, rollups, and dealer regime calculations
-- `storage.py` - SQLite snapshot and aggregate persistence
-- `gex_price_overlay.py` - chart generation
-- `discord_webhook.py` - Discord PNG upload helper
-- `auth_demo.py` - standalone auth helper
-- `tests/` - pytest coverage for normalization, math, storage, and CLI flows
-- `out/` - generated CSV, JSON, and PNG outputs
-- `.env` - local credentials and webhook config
+**Type:** Hedging / Insurance
+**Outlook:** Bullish but cautious
 
-## Requirements
+You own 100 shares and buy one put option as insurance. If the stock drops, the put gains value, offsetting losses. Think of it as a deductible insurance policy on your portfolio.
 
-- Python 3.10+
-- Schwab API credentials
-- Discord webhook URL if you want automatic uploads
+- **Max profit:** Unlimited (stock appreciation minus premium paid)
+- **Max loss:** (Stock purchase price - strike price) + premium paid
+- **Risk profile:** Limits downside while preserving upside
 
-## Setup
+---
 
-From the repo root:
+## 3. Iron Condor
 
-```bash
-cd python_scripts
-pip install -e .
-```
+**Type:** Premium collection / Range-bound
+**Outlook:** Neutral
 
-That installs the package in editable mode and makes the `gexd` command available in your shell environment.
+Sell one out-of-the-money put, buy one further OTM put (lower wing). Sell one OTM call, buy one further OTM call (upper wing). You profit when the stock stays within a range between the two short strikes. All four legs expire worthless = you keep all premium.
 
-## Environment Variables
+Research highlight: Huang, Sun & Yang (2025) [arXiv:2501.12397] formulate Iron Condor optimization as a stochastic optimal control problem, analyzing the transient value process of the portfolio rather than just expiration outcomes.
 
-Create or update `python_scripts/.env`.
+- **Max profit:** Net premium received
+- **Max loss:** Difference between strike widths minus net premium
+- **Risk profile:** Defined risk, high probability of small profit
 
-Example:
+---
 
-```env
-SCHWAB_API_KEY=...
-SCHWAB_API_SECRET=...
-SCHWAB_REDIRECT_URI=...
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
-```
+## 4. Long Straddle
 
-Notes:
-
-- `.env` is a hidden file, so use `ls -a` if you do not see it
-- `DISCORD_WEBHOOK_URL` is required for `discord-send`, `gex-chart-discord`, `market-report-discord`, and `gexd`
-
-## First-Time Authentication
-
-Run:
-
-```bash
-python auth_demo.py
-```
-
-Or use the CLI:
-
-```bash
-python -m cli auth
-```
-
-If needed, you can paste the callback URL directly:
+**Type:** Volatility play
+**Outlook:** Big move expected (direction unknown)
 
-```bash
-python -m cli auth --prompt
-```
+Buy one ATM call and one ATM put at the same strike and expiration. You profit if the stock moves sharply in either direction, enough to exceed the total cost of both premiums.
 
-## Main Commands
+- **Max profit:** Unlimited (upside) or (strike - premium) on downside
+- **Max loss:** Total premium paid for both options
+- **Risk profile:** Expensive to enter; needs a big move to be profitable
 
-### 1. Fastest Daily Command
+---
 
-Use `gexd` for the normal workflow:
-
-```bash
-gexd
-gexd SPY
-gexd QQQ 15
-```
-
-Behavior:
-
-- first argument = symbol, default `SPY`
-- second argument = max GEX levels, default `10`
-- default option-chain window = `30` days
-- default output path = `out/<symbol>_gex_price_overlay.png`
-- uploads the finished PNG to Discord
-
-Examples:
-
-```bash
-gexd
-gexd SPY 10
-gexd QQQ 15
-gexd IWM 12 --days 45
-```
-
-Help:
-
-```bash
-gexd --help
-```
-
-### 2. Full Python CLI Commands
-
-Preferred grouped commands:
-
-```bash
-python -m cli auth login
-python -m cli auth login --prompt
-python -m cli market quote --symbol SPY
-python -m cli options expirations --symbol SPY
-python -m cli options fetch --symbol SPY --days 30 --output out/options.csv --json-output out/options.json
-python -m cli options fetch --symbol SPY --days 30 --output out/options.csv --persist-db
-python -m cli exposure gex --symbol SPY --days 30 --output out/gex.json
-python -m cli exposure gex --symbol SPY --days 30 --output out/gex.json --persist-db
-python -m cli analysis options --symbol SPY --days 30 --output out/options_analysis.json
-python -m cli analysis options --symbol SPY --days 30 --prior-regime balanced
-python -m cli analysis options --symbol SPY --days 30 --discord
-python -m cli exposure history --symbol SPY --limit 5
-python -m cli chart render --symbol SPY --days 30 --output out/gex_price_overlay.png
-python -m cli chart render --symbol SPY --days 30 --output out/gex_price_overlay.png --discord
-python -m cli chart send --file out/gex_price_overlay.png
-python -m cli chart post --symbol SPY --days 30 --output out/gex_price_overlay.png
-python -m cli report market
-python -m cli report market --force --discord
-pytest -q
-```
-
-Legacy flat commands still work for backward compatibility:
+## 5. Strangle (Delta-Symmetric)
 
-```bash
-python -m cli auth
-python -m cli auth --prompt
-python -m cli quote --symbol SPY
-python -m cli expirations --symbol SPY
-python -m cli fetch-options --symbol SPY --days 30 --output out/options.csv --json-output out/options.json
-python -m cli fetch-options --symbol SPY --days 30 --output out/options.csv --persist-db
-python -m cli gex --symbol SPY --days 30 --output out/gex.json
-python -m cli gex --symbol SPY --days 30 --output out/gex.json --persist-db
-python -m cli options-analysis --symbol SPY --days 30 --output out/options_analysis.json
-python -m cli options-analysis --symbol SPY --days 30 --prior-regime balanced
-python -m cli options-analysis --symbol SPY --days 30 --no-discord
-python -m cli gex-history --symbol SPY --limit 5
-python -m cli gex-chart --symbol SPY --days 30 --output out/gex_price_overlay.png
-python -m cli discord-send --file out/gex_price_overlay.png
-python -m cli gex-chart-discord --symbol SPY --days 30 --output out/gex_price_overlay.png
-python -m cli market-report-discord
-python -m cli market-report-discord --force
-pytest -q
-```
-
-### 3. Hourly Market Report To Discord
-
-Use this command to post a text-only market update during the regular session:
+**Type:** Volatility play (cheaper than straddle)
+**Outlook:** Big move expected (direction unknown)
 
-```bash
-python -m cli report market --discord
-```
+Buy an OTM call and an OTM put at different strikes (same expiration). Cheaper than a straddle but requires a larger move to profit.
 
-Behavior:
-
-- posts only on weekdays at `8:30 AM CT`, `9:30 AM CT`, `10:30 AM CT`, `11:30 AM CT`, `12:30 PM CT`, `1:30 PM CT`, and `2:30 PM CT`
-- add `--force` to test outside the allowed session window
-- report sections are `SPX / S&P 500 Breadth` and `NASDAQ-100 Breadth`
-- each section includes breadth plus top 5 volume, top 5 gainers, and top 5 losers
+Research highlight: The delta-symmetric strangle is studied under the Black-Scholes framework [arXiv:2003.03876], providing a measure of relative value for this popular strategy used to mitigate volatility risk.
 
-Example cron-style execution:
-
-```bash
-python -m cli report market --force --discord
-```
+- **Max profit:** Unlimited upside; substantial downside
+- **Max loss:** Total premium paid
+- **Risk profile:** Lower cost than straddle, but needs even more volatility
 
-## Common Workflows
+---
 
-### Generate a chart and upload it to Discord
+## 6. Vertical (Bull/Bear) Spread
 
-Shortest version:
+**Type:** Directional with defined risk
+**Outlook:** Bullish (call spread) or Bearish (put spread)
 
-```bash
-gexd SPY
-```
+**Bull Call Spread:** Buy a lower-strike call, sell a higher-strike call (same expiration). You profit if the stock rises, but gains are capped at the upper strike.
 
-Equivalent full command:
+**Bear Put Spread:** Buy a higher-strike put, sell a lower-strike put. You profit if the stock falls, but gains are capped at the lower strike.
 
-```bash
-python -m cli chart post --symbol SPY --days 30 --max-levels 10 --output out/spy_gex_price_overlay.png
-```
+- **Max profit:** Difference between strikes minus net debit
+- **Max loss:** Net premium paid
+- **Risk profile:** Cheaper than buying a single call/put, but caps your gain
 
-### Generate a chart locally only
+---
 
-```bash
-python -m cli chart render --symbol SPY --days 30 --output out/gex_price_overlay.png
-```
+## 7. Wheel Strategy
 
-This creates a PNG in `out/` but does not upload it.
+**Type:** Income generation (systematic)
+**Outlook:** Neutral to bullish
 
-### Upload an existing PNG only
+1. Sell cash-secured puts on a stock you want to own. Collect premium.
+2. If assigned, you now own 100 shares at a discount.
+3. Sell covered calls against those shares. Collect more premium.
+4. If shares get called away, start over at step 1.
 
-```bash
-python -m cli chart send --file out/gex_price_overlay.png
-```
+This is a cyclical strategy popular among retail traders for generating consistent income on quality stocks.
 
-### Export options data
+- **Max profit:** Premium from puts + premium from calls + capital appreciation
+- **Max loss:** Stock purchase price (if assigned and stock goes to zero) minus premiums collected
+- **Risk profile:** Disciplined, repeatable income; requires patience and capital
 
-```bash
-python -m cli options fetch --symbol SPY --days 30 --output out/options.csv --json-output out/options.json
-```
+---
 
-### Export GEX report JSON
+## 8. High-Frequency Options Trading with Portfolio Optimization
 
-```bash
-python -m cli exposure gex --symbol SPY --days 30 --output out/gex.json
-```
+**Type:** Quantitative / Systematic
+**Outlook:** Varies
 
-The JSON report now includes:
+Research highlight: Bhatia (2024) [arXiv:2408.08866] explores high-frequency options trading on SPY (S&P 500 ETF) enhanced by portfolio optimization. The approach uses advanced statistical techniques to generate consistent positive returns compared to simple long or short option positions.
 
-- `snapshot`
-- `by_strike`
-- `by_expiration`
-- `by_dte_bucket`
-- `by_bucket`
-- `dealer_regime`
-- `headline_gex`
+- **Key idea:** Use intraday signals and optimization to dynamically manage option positions
+- **Risk profile:** Requires sophisticated infrastructure and low-latency execution
 
-`headline_gex` keeps the lightweight backward-compatible totals, while `snapshot` and `dealer_regime` provide the richer report used for persistence and validation.
+---
 
-`options_analysis` is a separate options-statistics layer with its own CLI command. It is no longer embedded into the default `gex` payload.
+## 9. Delta-Neutral Hedging
 
-`options_analysis` adds:
+**Type:** Risk management / Volatility trading
+**Outlook:** Focused on volatility, not direction
 
-- a regime classification with confidence and human-readable reasons
-- explicit regime scorecards plus optional hysteresis against a prior regime
-- active-strike distance gating so far OTM strikes do not dominate the output
-- gamma-flip sanity filtering so implausible levels are excluded from active analysis
-- data completeness scoring so missing inputs are explicit
-- ranked strike and expiration focus lists with opportunity tags
-- strategy fit scoring tied to the current dealer regime
-- a short narrative block for downstream CLI, API, or Discord formatting
+Construct a portfolio where the net delta is zero -- gains/losses from the underlying are offset by the options position. You profit from changes in volatility or time decay (theta) rather than directional moves.
 
-### Run standalone options analysis
+Research highlight: Fractional delta hedging with transaction costs is studied in [arXiv:1702.00037], providing pricing formulas for European currency options under discrete-time rebalancing.
 
-```bash
-python -m cli analysis options --symbol SPY --days 30
-python -m cli analysis options --symbol SPY --days 30 --output out/options_analysis.json
-python -m cli analysis options --symbol SPY --days 30 --prior-regime transition
-python -m cli analysis options --symbol SPY --days 30 --discord
-python -m cli options-analysis --symbol SPY --days 30 --no-discord
-```
+- **Max profit:** Depends on volatility spread and gamma/theta balance
+- **Max loss:** Transaction costs, adverse gamma, and model risk
+- **Risk profile:** Complex; requires continuous monitoring and rebalancing
 
-The grouped command is local-only by default and uses `--discord` to send the text summary to the configured Discord webhook. The legacy flat command still posts by default, and `--no-discord` keeps that legacy path local-only.
+---
 
-This command emits analysis-only output built from the normalized options chain and upstream exposure report, without exposing the full GEX payload as the primary interface.
+## 10. Semi-Static Hedging with American Options
 
-The Discord summary includes:
+**Type:** Advanced hedging framework
+**Outlook:** Risk management
 
-- regime, confidence, and key levels
-- top strategies with fit scores
-- top strikes with opportunity tags
-- top expirations with DTE context
-- regime drivers and quality notes
+Research highlight: Bayraktar & Zhou [arXiv:1502.06681, arXiv:1604.04608] develop frameworks for hedging exotic payoffs using a combination of dynamic stock trading and static option positions. Since most traded options on US stocks are American-style, these results are directly applicable to real markets.
 
-When `--persist-db` is enabled, the same fetch writes a snapshot into `out/options_history.sqlite3` with:
+- **Key idea:** Use liquid American options as static hedges alongside dynamic stock positions
+- **Risk profile:** Model-dependent; reduces hedging cost versus purely dynamic approaches
 
-- one row in `snapshots`
-- normalized raw contracts in `option_contracts`
-- strike aggregates in `aggregates_by_strike`
-- expiry aggregates in `aggregates_by_expiry`
-- DTE, moneyness, and distance-from-spot aggregates in `aggregates_by_bucket`
+---
 
-Snapshot history is keyed by the normalized chain symbol, so `gex-history --symbol SPY` returns persisted SPY runs consistently.
+## Key References from arXiv
 
-### Inspect recent persisted snapshots
+| ID | Title | Year |
+|----|-------|------|
+| 2501.12397 | Stochastic Optimal Control of Iron Condor Portfolios | 2025 |
+| 2408.08866 | High-Frequency Options Trading with Portfolio Optimization | 2024 |
+| 2003.03876 | Relative Value of Delta-Symmetric Strangle | 2020 |
+| 1912.04492 | 151 Trading Strategies (book, covers options extensively) | 2019 |
+| 1702.00037 | Fractional Delta Hedging with Transaction Costs | 2017 |
+| 1604.04608 | Super-Hedging American Options with Semi-Static Strategies | 2016 |
+| 1502.06681 | Arbitrage, Hedging & Utility with Semi-Static Strategies | 2015 |
 
-```bash
-python -m cli gex-history --symbol SPY --limit 10
-```
+---
 
-## Output Files
+## Quick Comparison
 
-Generated files are usually written to `python_scripts/out/`.
+| Strategy | Direction | Risk | Income? | Complexity |
+|----------|-----------|------|---------|------------|
+| Covered Call | Neutral/Bull | Defined | Yes | Low |
+| Protective Put | Bull | Defined | No | Low |
+| Iron Condor | Neutral | Defined | Yes | Medium |
+| Long Straddle | Either | Defined | No | Medium |
+| Strangle | Either | Defined | No | Medium |
+| Vertical Spread | Bull or Bear | Defined | Possible | Low |
+| Wheel | Neutral/Bull | Stock risk | Yes | Medium |
+| HF Options | Varies | Variable | Yes | High |
+| Delta-Neutral | Neutral | Variable | Yes | High |
+| Semi-Static Hedge | Hedge | Defined | No | High |
 
-Typical outputs:
+---
 
-- `out/options.csv`
-- `out/options.json`
-- `out/gex.json`
-- `out/options_history.sqlite3`
-- `out/spy_gex_price_overlay.png`
-- `out/qqq_gex_price_overlay.png`
-
-## SQLite Schema Notes
-
-The SQLite database created at `out/options_history.sqlite3` contains four main analytical tables:
-
-- `snapshots` - one row per persisted CLI run, including symbol, captured time, spot price, source, and raw chain JSON
-- `option_contracts` - normalized option rows with stable `underlying_price`, `snapshot_captured_at`, `expiration_date`, `dte`, and `strike`
-- `aggregates_by_strike` - strike-level exposure rollups used by reports and wall analysis
-- `aggregates_by_expiry` - expiry-level exposure rollups including `net_gex`, `net_dex`, `net_vex`, and `net_tex`
-- `aggregates_by_bucket` - grouped rollups for DTE buckets, moneyness buckets, and distance-from-spot buckets
-
-Typical verification commands:
-
-```bash
-sqlite3 out/options_history.sqlite3 ".tables"
-sqlite3 out/options_history.sqlite3 "select id, symbol, captured_at, underlying_price, source from snapshots order by id desc limit 5;"
-sqlite3 out/options_history.sqlite3 "select count(*) from option_contracts;"
-sqlite3 out/options_history.sqlite3 "select count(*) from aggregates_by_strike;"
-sqlite3 out/options_history.sqlite3 "select count(*) from aggregates_by_expiry;"
-sqlite3 out/options_history.sqlite3 "select count(*) from aggregates_by_bucket;"
-```
-
-## Test Coverage
-
-The local pytest suite now covers the main regression paths:
-
-- `models.flatten_option_chain()` normalization, including chain-level spot usage and `snapshot_captured_at`
-- `gex.compute_gex()` exact fixture totals
-- `gex.compute_exposure_report()` reconciliation across strike, expiry, and DTE bucket rollups
-- `gex.compute_gex_levels()` output shape compatibility for chart generation
-- `storage.init_db()` and insert helpers for snapshots, contracts, and aggregates
-- CLI smoke tests for `gex --persist-db` and `gex-history`
-
-Run the suite from `python_scripts/`:
-
-```bash
-pytest -q
-```
-
-For a fast syntax pass:
-
-```bash
-python -m compileall .
-```
-
-## Optional Shell Function
-
-If you want a shell wrapper instead of the installed script, add this to `~/.zshrc`:
-
-```bash
-gexd() {
-  local symbol="${1:-SPY}"
-  local max_levels="${2:-10}"
-  cd /Users/arivera/projects/project_go/python_scripts || return 1
-  python -m cli gex-chart-discord --symbol "$symbol" --days 30 --max-levels "$max_levels" --output "out/${symbol,,}_gex_price_overlay.png"
-}
-```
-
-Then reload your shell:
-
-```bash
-source ~/.zshrc
-```
-
-## Troubleshooting
-
-### `.env` is missing
-
-- make sure you are inside `python_scripts`
-- run `ls -a` because `.env` is hidden
-
-### Discord upload fails
-
-- confirm `DISCORD_WEBHOOK_URL` exists in `.env`
-- confirm the PNG file was created in `out/`
-- `discord-send` only uploads PNG files
-
-### `gexd` command not found
-
-Run:
-
-```bash
-cd /Users/arivera/projects/project_go/python_scripts
-pip install -e .
-```
-
-Then open a new shell or refresh your environment.
-
-### Authentication issues
-
-- verify `SCHWAB_API_KEY`, `SCHWAB_API_SECRET`, and `SCHWAB_REDIRECT_URI`
-- rerun `python auth_demo.py` or `python -m cli auth --prompt`
-
-## Quick Reference
-
-```bash
-cd /Users/arivera/projects/project_go/python_scripts
-pip install -e .
-
-gexd
-gexd SPY
-gexd QQQ 15
-
-python -m cli --help
-gexd --help
-```
+*Research sourced from arXiv (export.arxiv.org) and Semantic Scholar APIs. This document is for educational purposes only -- not financial advice.*
+docker compose up -d db scraper-watch spread-hunter

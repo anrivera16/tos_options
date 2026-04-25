@@ -54,7 +54,9 @@ def _response_json(response: Any, endpoint: str) -> Any:
     try:
         return response.json()
     except ValueError as exc:
-        raise SchwabApiError(f"Schwab API returned invalid JSON for {endpoint}.") from exc
+        raise SchwabApiError(
+            f"Schwab API returned invalid JSON for {endpoint}."
+        ) from exc
 
 
 def _request_json(request_fn: Any, endpoint: str, **kwargs: Any) -> Any:
@@ -62,7 +64,9 @@ def _request_json(request_fn: Any, endpoint: str, **kwargs: Any) -> Any:
     try:
         response = request_fn(client, **kwargs)
     except RequestException as exc:
-        raise SchwabApiError(f"Schwab API request failed for {endpoint}: {exc}") from exc
+        raise SchwabApiError(
+            f"Schwab API request failed for {endpoint}: {exc}"
+        ) from exc
     except Exception as exc:
         raise SchwabApiError(f"Unexpected error calling {endpoint}: {exc}") from exc
 
@@ -70,7 +74,9 @@ def _request_json(request_fn: Any, endpoint: str, **kwargs: Any) -> Any:
 
 
 def get_quote(symbol: str) -> dict[str, Any]:
-    payload = _request_json(lambda client, **_: client.quote(symbol), f"quote({symbol})")
+    payload = _request_json(
+        lambda client, **_: client.quote(symbol), f"quote({symbol})"
+    )
     try:
         return payload[symbol]
     except KeyError as exc:
@@ -80,20 +86,26 @@ def get_quote(symbol: str) -> dict[str, Any]:
 def get_quotes(symbols: list[str]) -> dict[str, dict[str, Any]]:
     if not symbols:
         return {}
-    payload = _request_json(lambda client, **_: client.quotes(symbols), f"quotes({','.join(symbols)})")
+    payload = _request_json(
+        lambda client, **_: client.quotes(symbols), f"quotes({','.join(symbols)})"
+    )
     if not isinstance(payload, dict):
         raise SchwabApiError("Quotes payload was not a JSON object.")
     return payload
 
 
-def get_top_movers(symbol: str, sort: str, frequency: int = 0, limit: int = 5) -> list[dict[str, Any]]:
+def get_top_movers(
+    symbol: str, sort: str, frequency: int = 0, limit: int = 5
+) -> list[dict[str, Any]]:
     payload = _request_json(
         lambda client, **_: client.movers(symbol, sort=sort, frequency=frequency),
         f"movers({symbol},{sort})",
     )
     screeners = payload.get("screeners") if isinstance(payload, dict) else None
     if not isinstance(screeners, list):
-        raise SchwabApiError(f"Movers payload for {symbol} did not include a screeners list.")
+        raise SchwabApiError(
+            f"Movers payload for {symbol} did not include a screeners list."
+        )
 
     rows: list[dict[str, Any]] = []
     for screener in screeners:
@@ -109,7 +121,9 @@ def get_top_movers(symbol: str, sort: str, frequency: int = 0, limit: int = 5) -
     return rows[:limit]
 
 
-def debug_top_movers_payload(symbol: str, sort: str, frequency: int = 0) -> dict[str, Any]:
+def debug_top_movers_payload(
+    symbol: str, sort: str, frequency: int = 0
+) -> dict[str, Any]:
     payload = _request_json(
         lambda client, **_: client.movers(symbol, sort=sort, frequency=frequency),
         f"movers({symbol},{sort})",
@@ -138,6 +152,7 @@ def get_option_chain(
     strategy: str = "SINGLE",
     interval: str = "1",
     days: int | None = None,
+    strike_count: int | None = None,
 ) -> dict[str, Any]:
     request_symbol = normalize_option_chain_symbol(symbol)
     if days is not None:
@@ -159,6 +174,8 @@ def get_option_chain(
     }
     if strike_range:
         params["strikeRange"] = strike_range
+    if strike_count is not None:
+        params["strikeCount"] = strike_count
     coerced_from = _coerce_date(from_date)
     coerced_to = _coerce_date(to_date)
     if coerced_from:
@@ -183,6 +200,7 @@ def get_option_chain_rows(
     strategy: str = "SINGLE",
     interval: str = "1",
     days: int | None = None,
+    strike_count: int | None = None,
 ) -> list[dict[str, Any]]:
     chain_data = get_option_chain(
         symbol=symbol,
@@ -195,6 +213,7 @@ def get_option_chain_rows(
         strategy=strategy,
         interval=interval,
         days=days,
+        strike_count=strike_count,
     )
     return option_chain_rows_to_dicts(chain_data, symbol)
 
@@ -234,12 +253,16 @@ def get_price_history(
         if isinstance(start_datetime, datetime):
             params["startDate"] = int(start_datetime.timestamp() * 1000)
         else:
-            params["startDate"] = int(datetime.fromisoformat(coerced_start).timestamp() * 1000)
+            params["startDate"] = int(
+                datetime.fromisoformat(coerced_start).timestamp() * 1000
+            )
     if coerced_end:
         if isinstance(end_datetime, datetime):
             params["endDate"] = int(end_datetime.timestamp() * 1000)
         else:
-            params["endDate"] = int(datetime.fromisoformat(coerced_end).timestamp() * 1000)
+            params["endDate"] = int(
+                datetime.fromisoformat(coerced_end).timestamp() * 1000
+            )
 
     payload = _request_json(
         lambda client, **_: client.price_history(symbol, **params),
@@ -253,7 +276,9 @@ def get_price_history(
         timestamp = None
         if timestamp_raw not in (None, ""):
             try:
-                timestamp = datetime.fromtimestamp(float(timestamp_raw) / 1000.0).isoformat()
+                timestamp = datetime.fromtimestamp(
+                    float(timestamp_raw) / 1000.0
+                ).isoformat()
             except (TypeError, ValueError, OSError):
                 timestamp = None
 

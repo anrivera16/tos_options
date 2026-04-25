@@ -329,6 +329,39 @@ def build_parser() -> argparse.ArgumentParser:
     )
     options_analysis_parser.set_defaults(func=run_options_analysis)
 
+    # ── IV Term Structure ──
+    from gex.iv_term import register_parser as _reg_iv_term
+    _reg_iv_term(subparsers)
+
+    # ── Universe Scanner ──
+    universe_parser = subparsers.add_parser(
+        "universe", help="Scan and rank stocks for options trading"
+    )
+    universe_subparsers = universe_parser.add_subparsers(
+        dest="universe_command", required=True
+    )
+    universe_scan_parser = universe_subparsers.add_parser(
+        "scan", help="Run universe scan now"
+    )
+    universe_scan_parser.add_argument("--top", type=int, default=None,
+                                       help="Override max names to select")
+    universe_scan_parser.add_argument("--save", action="store_true",
+                                       help="Save selected tickers to config file")
+
+    def _run_universe_scan(args):
+        import subprocess
+        import sys as _sys
+        script = str(Path(__file__).parent / "scripts" / "universe_scanner.py")
+        cmd = [_sys.executable, script, "--scan"]
+        if args.top:
+            cmd += ["--top", str(args.top)]
+        if args.save:
+            cmd.append("--save")
+        result = subprocess.run(cmd)
+        return result.returncode
+
+    universe_scan_parser.set_defaults(func=_run_universe_scan)
+
     exposure_parser = subparsers.add_parser(
         "exposure", help="Exposure and persistence commands"
     )
@@ -734,7 +767,11 @@ def _load_chain_and_rows(
 
 
 def _persist_snapshot(
-    db_path: str, source: str, chain: dict[str, Any], rows: list[dict[str, Any]]
+    db_path: str,
+    source: str,
+    chain: dict[str, Any],
+    rows: list[dict[str, Any]],
+    skip_raw_json: bool = False,
 ) -> int:
     if not rows:
         return 0
@@ -763,8 +800,11 @@ def _persist_snapshot(
             underlying_price=spot,
             source=source,
             chain_payload=chain,
+            skip_raw_json=skip_raw_json,
         )
-        insert_option_contracts(connection, snapshot_id, rows)
+        insert_option_contracts(
+            connection, snapshot_id, rows, skip_raw_json=skip_raw_json
+        )
         exposure_report = compute_exposure_report(rows)
         strike_rows = []
         for row in exposure_report["by_strike"]:
