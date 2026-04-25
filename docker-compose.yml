@@ -110,32 +110,6 @@ services:
       db:
         condition: service_healthy
 
-  positions:
-    build: .
-    env_file: .env
-    environment:
-      DATABASE_URL: postgresql://trader:${POSTGRES_PASSWORD:-changeme}@db:5432/options
-    volumes:
-      - /Users/arivera/.schwabdev:/root/.schwabdev
-      - .:/app
-    command: ["positions", "show"]
-    depends_on:
-      db:
-        condition: service_healthy
-
-  journal:
-    build: .
-    env_file: .env
-    environment:
-      DATABASE_URL: postgresql://trader:${POSTGRES_PASSWORD:-changeme}@db:5432/options
-    volumes:
-      - /Users/arivera/.schwabdev:/root/.schwabdev
-      - .:/app
-    command: ["journal", "list"]
-    depends_on:
-      db:
-        condition: service_healthy
-
   # Scans for spread opportunities every 15 min, alerts to Discord
   spread-hunter:
     build: .

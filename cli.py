@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import importlib
 import json
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -10,7 +9,6 @@ from typing import Any
 
 from discord.webhook import DiscordWebhookError, send_message, send_png
 from gex import compute_exposure_report, compute_gex
-from options_analysis import build_options_analysis
 from gex.chart import generate_chart
 from gex.storage import (
     DEFAULT_DB_PATH,
@@ -19,11 +17,6 @@ from gex.storage import (
     insert_aggregate_rows,
     insert_option_contracts,
     insert_snapshot,
-)
-from market_report import (
-    MarketReportError,
-    build_market_report,
-    validate_market_report_time,
 )
 from schwab.api import (
     get_expirations,
@@ -41,8 +34,6 @@ def main() -> None:
     try:
         args.func(args)
     except SchwabConfigError as exc:
-        raise SystemExit(str(exc)) from exc
-    except MarketReportError as exc:
         raise SystemExit(str(exc)) from exc
     except DiscordWebhookError as exc:
         raise SystemExit(str(exc)) from exc
@@ -91,6 +82,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Schwab data utilities")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    # ── Auth ──
     auth_parser = subparsers.add_parser("auth", help="Authentication commands")
     auth_parser.add_argument("--callback-url", help="OAuth callback URL to exchange")
     auth_parser.add_argument(
@@ -110,6 +102,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     auth_login_parser.set_defaults(func=run_auth)
 
+    # ── Market ──
     market_parser = subparsers.add_parser("market", help="Market data commands")
     market_subparsers = market_parser.add_subparsers(
         dest="market_command", required=True
@@ -119,20 +112,7 @@ def build_parser() -> argparse.ArgumentParser:
     quote_parser.add_argument("--symbol", default="SPY")
     quote_parser.set_defaults(func=run_quote)
 
-    report_parser = subparsers.add_parser("report", help="Report commands")
-    report_subparsers = report_parser.add_subparsers(
-        dest="report_command", required=True
-    )
-
-    market_report_parser = report_subparsers.add_parser(
-        "market", help="Build an hourly market report"
-    )
-    market_report_parser.add_argument("--force", action="store_true")
-    market_report_parser.add_argument(
-        "--discord", action="store_true", help="Send the report to Discord"
-    )
-    market_report_parser.set_defaults(func=run_market_report)
-
+    # ── Options ──
     options_parser = subparsers.add_parser("options", help="Options chain commands")
     options_subparsers = options_parser.add_subparsers(
         dest="options_command", required=True
@@ -153,181 +133,6 @@ def build_parser() -> argparse.ArgumentParser:
     fetch_parser.add_argument("--db-path", default=DEFAULT_DB_PATH)
     fetch_parser.add_argument("--persist-db", action="store_true")
     fetch_parser.set_defaults(func=run_fetch_options)
-
-    # 0DTE Live Premium Flow commands
-    try:
-        from z0dte.backtest.live_runner import LiveRunner
-    except ImportError:
-        LiveRunner = None
-
-    def run_zodte_live(args):
-        runner = LiveRunner(
-            symbol=args.symbol,
-            interval_minutes=args.interval,
-            dry_run=args.dry_run,
-        )
-        runner.run_loop(max_iterations=args.count)
-
-    def run_zodte_snapshot(args):
-        try:
-            from z0dte.sources.live import LiveDataSource
-            from z0dte.ingestion.pipeline import IngestionPipeline
-            from z0dte.signals.net_premium_flow import NetPremiumFlow
-            from z0dte.db.connection import get_connection
-        except ImportError as e:
-            print(f"Error: Required module not available: {e}")
-            return
-
-        conn = get_connection()
-        source = LiveDataSource()
-        pipeline = IngestionPipeline(source, conn, [NetPremiumFlow()])
-        snapshot_id = pipeline.run_one(args.symbol)
-
-        result = conn.execute(
-            "SELECT * FROM signal_premium_flow WHERE snapshot_id = %s", (snapshot_id,)
-        ).fetchone()
-
-        if result:
-            direction = "BULLISH" if result["net_premium_flow"] > 0 else "BEARISH"
-            print(f"\n0DTE Premium Flow Snapshot")
-            print(f"=" * 40)
-            print(f"Symbol:     {result['symbol']}")
-            print(f"Time:       {result['captured_at']}")
-            print(f"SPY:        ${result['price_at_bar']:.2f}")
-            print(f"Direction:  {direction}")
-            print(f"Net Flow:  ${result['net_premium_flow']:+,.0f}")
-            print(f"Call Ask:  ${result['call_premium_at_ask']:+,.0f}")
-            print(f"Call Bid:  ${result['call_premium_at_bid']:+,.0f}")
-            print(f"Put Ask:   ${result['put_premium_at_ask']:+,.0f}")
-            print(f"Put Bid:   ${result['put_premium_at_bid']:+,.0f}")
-            print(f"Cumulative:${result['cumulative_flow']:+,.0f}")
-        else:
-            print("No result found")
-
-    def run_zodte_oi_walls(args):
-        runner_module = importlib.import_module("z0dte.0dte.live.oi_walls_runner")
-        runner = runner_module.OIWallsLiveRunner(
-            symbol=args.symbol,
-            interval_minutes=args.interval,
-            top_n=args.top_n,
-            dry_run=args.dry_run,
-            discord=args.discord,
-            debug=args.debug,
-            persist_db=args.persist_db,
-            db_dedupe_window_min=args.db_dedupe_window_min,
-        )
-        runner.run_loop(max_iterations=args.count)
-
-    zodte_parser = subparsers.add_parser("zodte", help="0DTE premium flow commands")
-    zodte_subparsers = zodte_parser.add_subparsers(dest="zodte_command", required=True)
-
-    # Live watch mode
-    zodte_live_parser = zodte_subparsers.add_parser(
-        "watch", help="Run live premium flow monitoring"
-    )
-    zodte_live_parser.add_argument("--symbol", default="SPY", help="Underlying symbol")
-    zodte_live_parser.add_argument(
-        "--interval",
-        type=int,
-        default=15,
-        help="Minutes between API calls (default: 15)",
-    )
-    zodte_live_parser.add_argument(
-        "--count",
-        type=int,
-        default=None,
-        help="Number of iterations (default: run forever)",
-    )
-    zodte_live_parser.add_argument(
-        "--dry-run", action="store_true", help="Parse data but skip database writes"
-    )
-    zodte_live_parser.set_defaults(func=run_zodte_live)
-
-    # Single snapshot
-    zodte_snapshot_parser = zodte_subparsers.add_parser(
-        "snapshot", help="Fetch single premium flow snapshot"
-    )
-    zodte_snapshot_parser.add_argument(
-        "--symbol", default="SPY", help="Underlying symbol"
-    )
-    zodte_snapshot_parser.set_defaults(func=run_zodte_snapshot)
-
-    zodte_oi_walls_parser = zodte_subparsers.add_parser(
-        "oi-walls", help="Run live OI walls monitoring"
-    )
-    zodte_oi_walls_parser.add_argument(
-        "--symbol", default="SPY", help="Underlying symbol"
-    )
-    zodte_oi_walls_parser.add_argument(
-        "--interval",
-        type=int,
-        default=15,
-        help="Minutes between API calls (default: 15)",
-    )
-    zodte_oi_walls_parser.add_argument(
-        "--count",
-        type=int,
-        default=None,
-        help="Number of iterations (default: run forever)",
-    )
-    zodte_oi_walls_parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Fetch and compute only (no DB writes, no Discord)",
-    )
-    zodte_oi_walls_parser.add_argument(
-        "--discord", action="store_true", help="Send OI wall text alerts to Discord"
-    )
-    zodte_oi_walls_parser.add_argument(
-        "--top-n", type=int, default=3, help="Top call/put walls per side"
-    )
-    zodte_oi_walls_parser.add_argument(
-        "--debug",
-        action="store_true",
-        help="Print endpoint/contract parsing diagnostics",
-    )
-    zodte_oi_walls_parser.add_argument(
-        "--persist-db",
-        action="store_true",
-        help="Persist snapshot/contracts/signals to Postgres",
-    )
-    zodte_oi_walls_parser.add_argument(
-        "--db-dedupe-window-min",
-        type=int,
-        default=5,
-        help="DB notification dedupe window in minutes",
-    )
-    zodte_oi_walls_parser.set_defaults(func=run_zodte_oi_walls)
-
-    analysis_parser = subparsers.add_parser(
-        "analysis", help="Higher-level analysis commands"
-    )
-    analysis_subparsers = analysis_parser.add_subparsers(
-        dest="analysis_command", required=True
-    )
-
-    options_analysis_parser = analysis_subparsers.add_parser(
-        "options",
-        help="Run standalone options analysis from option chain rows",
-    )
-    add_option_chain_arguments(options_analysis_parser)
-    options_analysis_parser.add_argument(
-        "--output", help="Optional JSON analysis output path"
-    )
-    options_analysis_parser.add_argument(
-        "--json-output", help="Optional raw JSON output path"
-    )
-    options_analysis_parser.add_argument(
-        "--prior-regime",
-        choices=["pinned", "balanced", "transition", "expansion", "exhaustion"],
-    )
-    options_analysis_parser.add_argument(
-        "--discord", action="store_true", help="Send the analysis summary to Discord"
-    )
-    options_analysis_parser.add_argument(
-        "--no-discord", action="store_true", help="Skip Discord post for this run"
-    )
-    options_analysis_parser.set_defaults(func=run_options_analysis)
 
     # ── IV Term Structure ──
     from gex.iv_term import register_parser as _reg_iv_term
@@ -362,6 +167,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     universe_scan_parser.set_defaults(func=_run_universe_scan)
 
+    # ── Exposure ──
     exposure_parser = subparsers.add_parser(
         "exposure", help="Exposure and persistence commands"
     )
@@ -387,6 +193,7 @@ def build_parser() -> argparse.ArgumentParser:
     history_parser.add_argument("--limit", type=int, default=10)
     history_parser.set_defaults(func=run_gex_history)
 
+    # ── Chart ──
     chart_parser = subparsers.add_parser(
         "chart", help="Chart rendering and publishing commands"
     )
@@ -426,6 +233,7 @@ def build_parser() -> argparse.ArgumentParser:
     chart_send_parser.add_argument("--file", required=True)
     chart_send_parser.set_defaults(func=run_discord_send)
 
+    # ── Legacy top-level commands ──
     legacy_fetch_parser = subparsers.add_parser(
         "fetch-options", help="Fetch normalized option rows"
     )
@@ -449,26 +257,6 @@ def build_parser() -> argparse.ArgumentParser:
     legacy_gex_parser.add_argument("--db-path", default=DEFAULT_DB_PATH)
     legacy_gex_parser.add_argument("--persist-db", action="store_true")
     legacy_gex_parser.set_defaults(func=run_gex)
-
-    legacy_options_analysis_parser = subparsers.add_parser(
-        "options-analysis",
-        help="Run standalone options analysis from option chain rows",
-    )
-    add_option_chain_arguments(legacy_options_analysis_parser)
-    legacy_options_analysis_parser.add_argument(
-        "--output", help="Optional JSON analysis output path"
-    )
-    legacy_options_analysis_parser.add_argument(
-        "--json-output", help="Optional raw JSON output path"
-    )
-    legacy_options_analysis_parser.add_argument(
-        "--prior-regime",
-        choices=["pinned", "balanced", "transition", "expansion", "exhaustion"],
-    )
-    legacy_options_analysis_parser.add_argument(
-        "--no-discord", action="store_true", help="Skip Discord post for this run"
-    )
-    legacy_options_analysis_parser.set_defaults(func=run_options_analysis)
 
     legacy_history_parser = subparsers.add_parser(
         "gex-history", help="Show recent persisted exposure snapshots"
@@ -509,13 +297,6 @@ def build_parser() -> argparse.ArgumentParser:
     legacy_chart_discord_parser.add_argument("--extended-hours", action="store_true")
     legacy_chart_discord_parser.set_defaults(func=run_gex_chart_discord)
 
-    legacy_market_report_parser = subparsers.add_parser(
-        "market-report-discord",
-        help="Post an hourly text market report to Discord",
-    )
-    legacy_market_report_parser.add_argument("--force", action="store_true")
-    legacy_market_report_parser.set_defaults(func=run_market_report_discord)
-
     legacy_quote_parser = subparsers.add_parser("quote", help="Fetch a quote")
     legacy_quote_parser.add_argument("--symbol", default="SPY")
     legacy_quote_parser.set_defaults(func=run_quote)
@@ -525,21 +306,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     legacy_expirations_parser.add_argument("--symbol", default="SPY")
     legacy_expirations_parser.set_defaults(func=run_expirations)
-
-    calendar_spread_parser = subparsers.add_parser(
-        "calendar-spread", help="Calendar spread scheduler commands"
-    )
-    calendar_spread_subparsers = calendar_spread_parser.add_subparsers(
-        dest="calendar_spread_command", required=True
-    )
-
-    calendar_spread_run_parser = calendar_spread_subparsers.add_parser(
-        "run", help="Run calendar spread scheduler"
-    )
-    calendar_spread_run_parser.add_argument(
-        "--discord", action="store_true", help="Send alerts to Discord webhook"
-    )
-    calendar_spread_run_parser.set_defaults(func=run_calendar_spread)
 
     return parser
 
@@ -593,150 +359,6 @@ def _write_csv(path: str, rows: list[dict[str, Any]]) -> None:
         writer.writeheader()
         for row in rows:
             writer.writerow({key: row.get(key) for key in fieldnames})
-
-
-def _format_options_analysis_discord_message(
-    symbol: str, analysis: dict[str, Any]
-) -> str:
-    regime = analysis.get("regime", {})
-    key_levels = analysis.get("key_levels", {})
-    strategies = analysis.get("strategies", [])
-    strikes = analysis.get("strikes", [])
-    expirations = analysis.get("expirations", [])
-    narrative = analysis.get("narrative", {})
-    completeness = analysis.get("data_completeness", {})
-    trade_suggestion = analysis.get("trade_suggestion", {})
-    scenarios = analysis.get("scenarios", [])
-
-    confidence = float(regime.get("confidence", 0.0) or 0.0)
-    completeness_ratio = float(completeness.get("completeness_ratio", 0.0) or 0.0)
-    spot_price = key_levels.get("spot_price")
-    call_wall = (key_levels.get("call_wall") or {}).get("strike")
-    put_wall = (key_levels.get("put_wall") or {}).get("strike")
-    top_strike = key_levels.get("top_strike")
-    gamma_flip = key_levels.get("gamma_flip")
-
-    def _fmt_level(value: Any) -> str:
-        return f"{value:.2f}" if isinstance(value, (int, float)) else "n/a"
-
-    def _fmt_trade_strikes(target: Any, secondary: Any) -> str:
-        target_text = _fmt_level(target)
-        secondary_text = _fmt_level(secondary)
-        if secondary_text != "n/a":
-            return f"{target_text} / {secondary_text}"
-        return target_text
-
-    def _fmt_tags(structural: list, opportunity: list) -> str:
-        all_tags = []
-        if structural:
-            all_tags.extend(structural)
-        if opportunity:
-            all_tags.extend(opportunity)
-        return ", ".join(all_tags) if all_tags else "no_tags"
-
-    top_strategy_lines = [
-        f"{index}. {item.get('strategy', 'n/a')} ({float(item.get('fit_score', 0.0)):.2f})"
-        for index, item in enumerate(strategies[:2], start=1)
-    ]
-    top_strike_lines = [
-        f"- {_fmt_level(item.get('strike'))} [{_fmt_tags(item.get('structural_tags', []), item.get('opportunity_tags', []))}]"
-        for item in strikes[:2]
-    ]
-    top_expiration_lines = [
-        f"- {item.get('expiration', 'n/a')} ({item.get('dte', 'n/a')} DTE) [{_fmt_tags(item.get('structural_tags', []), item.get('opportunity_tags', []))}]"
-        for item in expirations[:1]
-    ]
-    reason_lines = [f"- {reason}" for reason in regime.get("reasons", [])[:1]]
-    rationale_lines = [
-        f"- {reason}" for reason in trade_suggestion.get("rationale", [])[:2]
-    ]
-    leg_lines = [
-        f"- {leg.get('side', 'n/a')} {leg.get('option_type', 'n/a')} {_fmt_level(leg.get('strike'))} {leg.get('expiration', 'n/a')}"
-        for leg in trade_suggestion.get("legs", [])[:2]
-    ]
-
-    supporting_tags = trade_suggestion.get("supporting_tags", [])
-    conflicting_tags = trade_suggestion.get("conflicting_tags", [])
-    context_limitations = trade_suggestion.get("context_limitations", [])
-
-    supporting_text = (
-        f"Supporting: [{', '.join(supporting_tags[:3])}]" if supporting_tags else ""
-    )
-    conflicting_text = (
-        f"Conflicting: [{', '.join(conflicting_tags[:3])}]" if conflicting_tags else ""
-    )
-
-    scenario_lines = []
-    if scenarios:
-        scenario_lines = ["", "Key scenarios:"]
-        for s in scenarios[:3]:
-            scenario_lines.append(
-                f"- {s.get('scenario_name', 'n/a')}: spot {s.get('spot_change_pct', 0):+.0f}%, IV {s.get('iv_change', 0):+.0f}pts"
-            )
-
-    context_limit_lines = []
-    if context_limitations:
-        context_limit_lines = [f"- {lim}" for lim in context_limitations[:2]]
-    else:
-        context_limit_lines = ["- None noted"]
-
-    gamma_flip_text = (
-        f"{gamma_flip:.2f}" if isinstance(gamma_flip, (int, float)) else "n/a"
-    )
-    top_strike_text = _fmt_level(top_strike)
-
-    sections = [
-        f"Options Analysis - {symbol}",
-        f"Regime: {regime.get('name', 'unknown')} ({confidence:.2f})",
-        f"Spot: {_fmt_level(spot_price)}",
-        f"Top strike: {top_strike_text}",
-        f"Call wall: {_fmt_level(call_wall)}",
-        f"Put wall: {_fmt_level(put_wall)}",
-        f"Gamma flip: {gamma_flip_text}",
-        "",
-        "Top strategies:",
-        *(top_strategy_lines or ["- n/a"]),
-        "",
-        "Top strikes:",
-        *(top_strike_lines or ["- n/a"]),
-        "",
-        "Top expirations:",
-        *(top_expiration_lines or ["- n/a"]),
-        "",
-        "Regime drivers:",
-        *(reason_lines or ["- n/a"]),
-        "",
-        "Suggested trade:",
-        f"- Strategy: {trade_suggestion.get('strategy', 'n/a')} | Direction: {trade_suggestion.get('direction', 'n/a')}",
-        f"- Expiration: {trade_suggestion.get('expiration', 'n/a')}",
-        f"- Strikes: {_fmt_trade_strikes(trade_suggestion.get('target_strike'), trade_suggestion.get('secondary_strike'))}",
-        f"- {trade_suggestion.get('probability_type', 'POP estimate')}: {float(trade_suggestion.get('probability_of_profit', 0.0) or 0.0):.2f}",
-        f"- Confidence: {float(trade_suggestion.get('confidence', 0.0) or 0.0):.2f}",
-        "",
-        "Trade thesis:",
-        f"- {trade_suggestion.get('entry_thesis', 'n/a')}",
-        "",
-        supporting_text,
-        conflicting_text,
-        "",
-        "Valid while:",
-        f"- {trade_suggestion.get('valid_while', 'n/a')}",
-        "",
-        "Invalidation:",
-        f"- {trade_suggestion.get('invalidation', 'n/a')}",
-        "",
-        "Why this trade:",
-        *(rationale_lines or ["- n/a"]),
-        *(["", "Trade legs:", *leg_lines] if leg_lines else []),
-        "",
-        *scenario_lines,
-        "",
-        "Quality:",
-        f"- Completeness: {completeness_ratio:.0%}",
-        f"- {narrative.get('quality_note', 'No additional quality notes.')}",
-    ]
-
-    return "\n".join(sections)
 
 
 def _load_chain_and_rows(
@@ -922,37 +544,6 @@ def run_gex(args: argparse.Namespace) -> None:
     print(json.dumps(report, indent=2, sort_keys=True))
 
 
-def run_options_analysis(args: argparse.Namespace) -> None:
-    from options_analysis.scenarios import run_scenario_analysis
-
-    chain, rows = _load_chain_and_rows(args)
-    _write_json(args.json_output, chain)
-    report = compute_exposure_report(rows)
-    analysis = build_options_analysis(report, rows, prior_regime=args.prior_regime)
-    scenarios = run_scenario_analysis(analysis)
-    if scenarios:
-        analysis["scenarios"] = scenarios
-    payload = {
-        "symbol": str(chain.get("symbol") or args.symbol).upper(),
-        "options_analysis": analysis,
-    }
-    payload_text = json.dumps(payload, indent=2, sort_keys=True)
-    if args.output:
-        _write_json(args.output, payload)
-        print(f"Wrote options analysis to {args.output}")
-    else:
-        print(payload_text)
-
-    should_send_discord = bool(getattr(args, "discord", False)) or not bool(
-        getattr(args, "no_discord", False)
-    )
-    if should_send_discord:
-        send_message(
-            _format_options_analysis_discord_message(payload["symbol"], analysis)
-        )
-        print("Posted options analysis to Discord webhook.")
-
-
 def run_gex_history(args: argparse.Namespace) -> None:
     connection = get_connection(args.db_path)
     try:
@@ -1021,28 +612,6 @@ def run_gex_chart_discord(args: argparse.Namespace) -> None:
         f"Wrote GEX overlay chart for {result['symbol']} to {result['png_output']} and {result['html_output']} and uploaded the PNG to Discord "
         f"using {result['option_contracts']} option rows and {result['hourly_candles']} candles."
     )
-
-
-def run_market_report_discord(args: argparse.Namespace) -> None:
-    validate_market_report_time(force=args.force)
-    report = build_market_report()
-    send_message(report)
-    print("Posted market report to Discord webhook.")
-
-
-def run_market_report(args: argparse.Namespace) -> None:
-    validate_market_report_time(force=args.force)
-    report = build_market_report()
-    print(report)
-    if getattr(args, "discord", False):
-        send_message(report)
-        print("Posted market report to Discord webhook.")
-
-
-def run_calendar_spread(args: argparse.Namespace) -> None:
-    from scripts.calendar_spread_scheduler import start_scheduler
-
-    start_scheduler(send_discord=args.discord)
 
 
 if __name__ == "__main__":
