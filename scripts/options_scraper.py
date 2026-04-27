@@ -19,6 +19,7 @@ from cli import _persist_snapshot, _resolve_dates
 from gex.storage import DEFAULT_DB_PATH, get_connection, init_db
 from schwab.api import get_option_chain, get_option_chain_rows
 from schwab.client import SchwabConfigError
+from scripts.shared import ET, is_market_hours, send_heartbeat_alert, send_token_alert
 
 logging.basicConfig(
     level=logging.INFO,
@@ -27,7 +28,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-ET = ZoneInfo("US/Eastern")
 
 DEFAULT_TICKERS = ["SPY", "QQQ"]
 
@@ -65,17 +65,6 @@ def load_dynamic_tickers() -> list[str]:
     except Exception as exc:
         logger.warning(f"Failed to load dynamic tickers: {exc}")
         return []
-
-
-def is_market_hours() -> bool:
-    now = datetime.now(ET)
-    if now.weekday() >= 5:
-        return False
-    if now.hour < 9 or now.hour >= 16:
-        return False
-    if now.hour == 9 and now.minute < 30:
-        return False
-    return True
 
 
 class RateLimitBudget:
@@ -308,7 +297,7 @@ def start_scheduler(
 
     trigger = CronTrigger(
         day_of_week="mon-fri",
-        hour="9-16",
+        hour="4-19",
         minute=f"*/{interval_minutes}",
         timezone=ET,
     )
@@ -320,6 +309,37 @@ def start_scheduler(
         id="options_scraper",
         max_instances=1,
         misfire_grace_time=120,
+    )
+
+    # Heartbeat zombie detector — every 5 min during market hours
+    heartbeat_trigger = CronTrigger(
+        day_of_week="mon-fri",
+        hour="4-19",
+        minute="*/5",
+        timezone=ET,
+    )
+    scheduler.add_job(
+        send_heartbeat_alert,
+        heartbeat_trigger,
+        args=[db_path],
+        id="heartbeat_check",
+        max_instances=1,
+        misfire_grace_time=300,
+    )
+
+    # Token expiry alert — twice daily at 8:00 and 14:00 ET
+    token_trigger = CronTrigger(
+        day_of_week="mon-fri",
+        hour="8,14",
+        minute="0",
+        timezone=ET,
+    )
+    scheduler.add_job(
+        send_token_alert,
+        token_trigger,
+        id="token_expiry_check",
+        max_instances=1,
+        misfire_grace_time=3600,
     )
 
     def _shutdown(signum, frame):

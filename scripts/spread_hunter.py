@@ -43,14 +43,13 @@ from spread_hunter.spread_builder import SpreadHunterConfig, build_filtered_spre
 from spread_hunter.spread_scoring import score_all
 from spread_hunter.spread_display import format_all_results, format_discord_message
 from spread_hunter.spread_types import SignalFilter
+from scripts.shared import ET, is_market_hours, get_db_url, is_postgres
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
 logger = logging.getLogger(__name__)
-
-ET = ZoneInfo("US/Eastern")
 
 # Type filters mapping
 TYPE_GROUPS = {
@@ -62,26 +61,6 @@ TYPE_GROUPS = {
 }
 
 
-def get_db_url() -> str:
-    url = os.environ.get("DATABASE_URL")
-    if url:
-        return url
-    return os.environ.get("SQLITE_PATH", "out/options_history.sqlite3")
-
-
-def is_postgres(url: str) -> bool:
-    return url.startswith("postgresql://") or url.startswith("postgres://")
-
-
-def is_market_hours() -> bool:
-    now = datetime.now(ET)
-    if now.weekday() >= 5:
-        return False
-    if now.hour < 9 or now.hour >= 16:
-        return False
-    if now.hour == 9 and now.minute < 30:
-        return False
-    return True
 
 
 def build_config(args: argparse.Namespace) -> SpreadHunterConfig:
@@ -162,7 +141,7 @@ def start_scheduler(args: argparse.Namespace) -> None:
 
     trigger = CronTrigger(
         day_of_week="mon-fri",
-        hour="9-16",
+        hour="4-19",
         minute=f"*/{args.interval}",
         timezone=ET,
     )
@@ -174,6 +153,37 @@ def start_scheduler(args: argparse.Namespace) -> None:
         id="spread_hunter",
         max_instances=1,
         misfire_grace_time=120,
+    )
+
+    # Heartbeat zombie detector
+    from scripts.shared import send_heartbeat_alert, send_token_alert
+    heartbeat_trigger = CronTrigger(
+        day_of_week="mon-fri",
+        hour="4-19",
+        minute="*/5",
+        timezone=ET,
+    )
+    scheduler.add_job(
+        send_heartbeat_alert,
+        heartbeat_trigger,
+        id="heartbeat_check",
+        max_instances=1,
+        misfire_grace_time=300,
+    )
+
+    # Token expiry alert — twice daily
+    token_trigger = CronTrigger(
+        day_of_week="mon-fri",
+        hour="8,14",
+        minute="0",
+        timezone=ET,
+    )
+    scheduler.add_job(
+        send_token_alert,
+        token_trigger,
+        id="token_expiry_check",
+        max_instances=1,
+        misfire_grace_time=3600,
     )
 
     def _shutdown(signum, frame):

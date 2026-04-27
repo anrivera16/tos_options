@@ -39,29 +39,17 @@ from apscheduler.triggers.cron import CronTrigger
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
+from scripts.shared import ET, is_market_hours, get_db_url, is_postgres
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
 logger = logging.getLogger(__name__)
 
-ET = ZoneInfo("US/Eastern")
-
 # ---------------------------------------------------------------------------
 # DB
 # ---------------------------------------------------------------------------
-
-def get_db_url() -> str:
-    url = os.environ.get("DATABASE_URL")
-    if url:
-        return url
-    # fallback to SQLite for local dev
-    return os.environ.get("SQLITE_PATH", "out/options_history.sqlite3")
-
-
-def is_postgres(url: str) -> bool:
-    return url.startswith("postgresql://") or url.startswith("postgres://")
-
 
 def get_connection(url: str):
     if is_postgres(url):
@@ -418,18 +406,10 @@ def format_discord_message(all_hits: dict[str, list[ScannerHit]], now_str: str) 
 # Main loop
 # ---------------------------------------------------------------------------
 
-def is_market_hours() -> bool:
-    now = datetime.now(ET)
-    if now.weekday() >= 5:
-        return False
-    if now.hour < 9 or now.hour >= 16:
-        return False
-    if now.hour == 9 and now.minute < 30:
-        return False
-    return True
-
-
-def run_scan(tickers: list[str] | None = None, discord: bool = False) -> dict[str, list[ScannerHit]]:
+def run_scan(
+    tickers: list[str] | None = None,
+    discord: bool = False,
+) -> None:
     """Run all scanners against the latest snapshot. Returns hits keyed by scanner name."""
     db_url = get_db_url()
     conn = get_connection(db_url)
@@ -485,7 +465,7 @@ def start_scheduler(interval_minutes: int = 5, tickers: list[str] | None = None,
 
     trigger = CronTrigger(
         day_of_week="mon-fri",
-        hour="9-16",
+        hour="4-19",
         minute=f"*/{interval_minutes}",
         timezone=ET,
     )
@@ -497,6 +477,37 @@ def start_scheduler(interval_minutes: int = 5, tickers: list[str] | None = None,
         id="live_scanner",
         max_instances=1,
         misfire_grace_time=120,
+    )
+
+    # Heartbeat zombie detector
+    from scripts.shared import send_heartbeat_alert, send_token_alert
+    heartbeat_trigger = CronTrigger(
+        day_of_week="mon-fri",
+        hour="4-19",
+        minute="*/5",
+        timezone=ET,
+    )
+    scheduler.add_job(
+        send_heartbeat_alert,
+        heartbeat_trigger,
+        id="heartbeat_check",
+        max_instances=1,
+        misfire_grace_time=300,
+    )
+
+    # Token expiry alert — twice daily
+    token_trigger = CronTrigger(
+        day_of_week="mon-fri",
+        hour="8,14",
+        minute="0",
+        timezone=ET,
+    )
+    scheduler.add_job(
+        send_token_alert,
+        token_trigger,
+        id="token_expiry_check",
+        max_instances=1,
+        misfire_grace_time=3600,
     )
 
     def _shutdown(signum, frame):
