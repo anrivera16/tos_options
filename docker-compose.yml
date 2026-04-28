@@ -35,7 +35,7 @@ services:
     environment:
       DATABASE_URL: postgresql://trader:${POSTGRES_PASSWORD:-changeme}@db:5432/options
     volumes:
-      - /Users/arivera/.schwabdev:/root/.schwabdev
+      - ${SCHWAB_TOKEN_DIR:-/Users/arivera/.schwabdev}:/root/.schwabdev
       - .:/app
     command:
       - scripts/options_scraper.py
@@ -60,7 +60,7 @@ services:
     environment:
       DATABASE_URL: postgresql://trader:${POSTGRES_PASSWORD:-changeme}@db:5432/options
     volumes:
-      - /Users/arivera/.schwabdev:/root/.schwabdev
+      - ${SCHWAB_TOKEN_DIR:-/Users/arivera/.schwabdev}:/root/.schwabdev
       - .:/app
     command:
       - scripts/live_scanner.py
@@ -80,7 +80,7 @@ services:
     environment:
       DATABASE_URL: postgresql://trader:${POSTGRES_PASSWORD:-changeme}@db:5432/options
     volumes:
-      - /Users/arivera/.schwabdev:/root/.schwabdev
+      - ${SCHWAB_TOKEN_DIR:-/Users/arivera/.schwabdev}:/root/.schwabdev
       - .:/app
     command:
       - scripts/options_scraper.py
@@ -103,7 +103,7 @@ services:
     environment:
       DATABASE_URL: postgresql://trader:${POSTGRES_PASSWORD:-changeme}@db:5432/options
     volumes:
-      - /Users/arivera/.schwabdev:/root/.schwabdev
+      - ${SCHWAB_TOKEN_DIR:-/Users/arivera/.schwabdev}:/root/.schwabdev
       - .:/app
     command: ["--help"]
     depends_on:
@@ -118,7 +118,7 @@ services:
     environment:
       DATABASE_URL: postgresql://trader:${POSTGRES_PASSWORD:-changeme}@db:5432/options
     volumes:
-      - /Users/arivera/.schwabdev:/root/.schwabdev
+      - ${SCHWAB_TOKEN_DIR:-/Users/arivera/.schwabdev}:/root/.schwabdev
       - .:/app
     command:
       - scripts/spread_hunter.py
@@ -153,7 +153,7 @@ services:
     environment:
       DATABASE_URL: postgresql://trader:${POSTGRES_PASSWORD:-changeme}@db:5432/options
     volumes:
-      - /Users/arivera/.schwabdev:/root/.schwabdev
+      - ${SCHWAB_TOKEN_DIR:-/Users/arivera/.schwabdev}:/root/.schwabdev
       - .:/app
     command:
       - scripts/universe_scanner.py
