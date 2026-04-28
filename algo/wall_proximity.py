@@ -38,8 +38,6 @@ def apply_proximity_filter(
             c.tag("proximity:no_walls")
         return candidates
 
-    kept: list[CandidateSpread] = []
-
     for c in candidates:
         relevant_walls = _get_relevant_walls(c, walls, config)
 
@@ -47,7 +45,6 @@ def apply_proximity_filter(
             c.nearest_wall_strike = None
             c.nearest_wall_distance_pct = None
             c.tag("proximity:no_nearby_walls")
-            kept.append(c)
             continue
 
         # Find closest wall
@@ -66,10 +63,10 @@ def apply_proximity_filter(
             )
         else:
             c.tag(f"proximity:clear ({distance_pct:.2f}% from nearest wall)")
-            kept.append(c)
 
-    logger.info(f"Wall proximity: {len(kept)}/{len(candidates)} candidates passed")
-    return kept
+    passed_count = sum(1 for c in candidates if c.passed)
+    logger.info(f"Wall proximity: {passed_count}/{len(candidates)} candidates passed")
+    return candidates
 
 
 def _get_relevant_walls(

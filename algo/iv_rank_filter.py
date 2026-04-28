@@ -53,7 +53,7 @@ def apply_iv_rank_filter(
             c.tag("iv_rank:disabled")
         return candidates
 
-    if current_iv is None:
+    if current_iv is None or current_iv <= 0:
         for c in candidates:
             c.reject("iv_rank", "no IV data available")
         return candidates
@@ -75,13 +75,13 @@ def apply_iv_rank_filter(
         for c in candidates:
             c.reject("iv_rank", f"IV rank {rank:.0f}% < min {config.iv_rank_min}%")
         logger.info(f"IV rank {rank:.0f}% too low — all {len(candidates)} rejected")
-        return []
+        return candidates
 
     if rank > config.iv_rank_max:
         for c in candidates:
             c.reject("iv_rank", f"IV rank {rank:.0f}% > max {config.iv_rank_max}% (extreme IV)")
         logger.info(f"IV rank {rank:.0f}% too high — all {len(candidates)} rejected")
-        return []
+        return candidates
 
     for c in candidates:
         c.tag(f"iv_rank:{rank:.0f}%")

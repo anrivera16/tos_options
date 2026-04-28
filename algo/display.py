@@ -61,7 +61,9 @@ def format_pipeline_report(
         days = iv_info.get("days", 0)
         dte = iv_info.get("dte", "?")
         rank_str = f"{rank:.0f}%" if rank is not None else "n/a"
-        gate = "OPEN" if rank is not None and 30 <= rank <= 95 else "CLOSED"
+        iv_min = iv_info.get("iv_rank_min", 30)
+        iv_max = iv_info.get("iv_rank_max", 95)
+        gate = "OPEN" if rank is not None and iv_min <= rank <= iv_max else "CLOSED"
         gate_icon = "●" if gate == "OPEN" else "○"
         lines.append(f"  IV Rank  {gate_icon} {rank_str:<10s}  IV {iv:.1f}% (range {lo:.1f}-{hi:.1f}%)")
         lines.append(f"  IV Gate  {gate}")
@@ -89,6 +91,8 @@ def format_pipeline_report(
         ("Earnings     ", result.post_earnings),
         ("Wall Prox.   ", result.post_proximity),
     ]
+    if result.walls_detected:
+        lines.append(f"  OI Walls      {result.walls_detected} detected")
 
     for i, (name, count) in enumerate(stages):
         prev = stages[i - 1][1] if i > 0 else count

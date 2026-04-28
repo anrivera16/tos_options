@@ -99,7 +99,7 @@ def _build_put_credit_spreads(
     results: list[CandidateSpread] = []
     width = config.strike_width
 
-    for i, short_row in enumerate(otm):
+    for short_row in otm:
         short_strike = _to_float(short_row.get("strike"), 0)
         short_delta = abs(_to_float(short_row.get("delta")) or 0)
 
@@ -117,10 +117,10 @@ def _build_put_credit_spreads(
         if short_mark <= 0:
             continue
 
-        # Find long leg: exactly $width below
+        # Find long leg: exactly $width below, must be strictly below short
         target_long_strike = short_strike - width
-
-        long_row = _find_nearest_strike(otm, target_long_strike)
+        long_candidates = [p for p in otm if _to_float(p.get("strike"), 0) < short_strike]
+        long_row = _find_nearest_strike(long_candidates, target_long_strike)
         if long_row is None:
             continue
 
@@ -210,7 +210,7 @@ def _build_call_credit_spreads(
     results: list[CandidateSpread] = []
     width = config.strike_width
 
-    for i, short_row in enumerate(otm):
+    for short_row in otm:
         short_strike = _to_float(short_row.get("strike"), 0)
         short_delta = abs(_to_float(short_row.get("delta")) or 0)
 
@@ -226,9 +226,10 @@ def _build_call_credit_spreads(
         if short_mark <= 0:
             continue
 
+        # Find long leg: exactly $width above, must be strictly above short
         target_long_strike = short_strike + width
-
-        long_row = _find_nearest_strike(otm, target_long_strike)
+        long_candidates = [c for c in otm if _to_float(c.get("strike"), 0) > short_strike]
+        long_row = _find_nearest_strike(long_candidates, target_long_strike)
         if long_row is None:
             continue
 

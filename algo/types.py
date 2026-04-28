@@ -94,8 +94,10 @@ class CandidateSpread:
     entry_time: Optional[str] = None
     exit_date: Optional[str] = None
     exit_price: Optional[float] = None
-    pnl: Optional[float] = None
-    trade_result: Optional[str] = None  # "win", "loss", "partial_win"
+    pnl: Optional[float] = None          # per-share P&L
+    pnl_dollars: Optional[float] = None  # total dollar P&L (pnl * 100 * contracts)
+    trade_result: Optional[str] = None   # "win", "loss", "partial_win", "scratch"
+    contracts: int = 0
 
     # Trend context (set by trend filter)
     trend_direction: Optional[str] = None
@@ -122,6 +124,7 @@ class CandidateSpread:
         if self.trade_result is None:
             return None
         return self.trade_result in ("win", "partial_win")
+
 
     @property
     def breakeven(self) -> float:
@@ -154,7 +157,7 @@ class PipelineResult:
     post_trend: int = 0
     post_iv_rank: int = 0
     post_earnings: int = 0
-    post_walls: int = 0
+    walls_detected: int = 0
     post_proximity: int = 0
 
     # Final ranked candidates
@@ -190,15 +193,22 @@ class BacktestResult:
 
     def compute_summary(self) -> None:
         """Compute summary stats from the trades list."""
+        import logging as _logging
         resolved = [t for t in self.trades if t.trade_result is not None]
         if not resolved:
+            if self.trades:
+                _logging.getLogger(__name__).warning(
+                    f"{len(self.trades)} trades recorded but none have trade_result set — "
+                    "positions were never closed. All metrics will be zero."
+                )
             return
 
         self.total_trades = len(resolved)
         self.wins = sum(1 for t in resolved if t.trade_result == "win")
         self.partial_wins = sum(1 for t in resolved if t.trade_result == "partial_win")
         self.losses = sum(1 for t in resolved if t.trade_result == "loss")
-        self.win_rate = (self.wins + self.partial_wins) / self.total_trades * 100.0 if self.total_trades else 0.0
+        # partial_win = positive P&L below profit target; not counted as a full win
+        self.win_rate = self.wins / self.total_trades * 100.0 if self.total_trades else 0.0
 
         pnls = [t.pnl or 0.0 for t in resolved]
         rocs = [t.roc_pct for t in resolved]

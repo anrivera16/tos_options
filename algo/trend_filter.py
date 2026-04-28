@@ -94,23 +94,20 @@ def apply_trend_filter(
         logger.info(f"Trend NEUTRAL — keeping all {len(candidates)} candidates")
         return candidates
 
-    kept: list[CandidateSpread] = []
     for c in candidates:
         if trend == TrendDirection.BULLISH:
             if c.spread_type == "bull_put_credit":
                 c.tag("trend:bullish_match")
-                kept.append(c)
             else:
-                c.reject("trend", f"bear call rejected in bullish trend")
+                c.reject("trend", "bear call rejected in bullish trend")
         elif trend == TrendDirection.BEARISH:
             if c.spread_type == "bear_call_credit":
                 c.tag("trend:bearish_match")
-                kept.append(c)
             else:
-                c.reject("trend", f"bull put rejected in bearish trend")
+                c.reject("trend", "bull put rejected in bearish trend")
         else:
-            # Neutral + keep_none
             c.reject("trend", "neutral trend, no trades taken")
 
-    logger.info(f"Trend {trend.value}: {len(kept)}/{len(candidates)} candidates passed")
-    return kept
+    passed_count = sum(1 for c in candidates if c.passed)
+    logger.info(f"Trend {trend.value}: {passed_count}/{len(candidates)} candidates passed")
+    return candidates

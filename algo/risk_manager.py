@@ -38,7 +38,7 @@ class PortfolioState:
 
     @property
     def available_capital(self) -> float:
-        committed = sum(p.max_loss * 100 for p in self.open_positions)  # per-contract * 100
+        committed = sum(p.max_loss * 100 * (p.contracts or 1) for p in self.open_positions)
         return self.bankroll - committed
 
 
@@ -98,43 +98,43 @@ class RiskManager:
 
     def open_position(self, candidate: CandidateSpread) -> None:
         """Record a new position."""
+        contracts = self.position_size(candidate)
+        candidate.contracts = contracts
+        candidate.tags.append(f"risk:contracts={contracts}")
         self.state.open_positions.append(candidate)
         self._trade_history.append(candidate)
         logger.info(
             f"Opened {candidate.spread_type} {candidate.short_strike}/{candidate.long_strike} "
             f"exp {candidate.expiration_date} — "
-            f"contracts={self.position_size(candidate)}, "
+            f"contracts={contracts}, "
             f"open positions={self.state.position_count}"
         )
 
-    def close_position(self, candidate: CandidateSpread, exit_price: float, exit_date: str) -> None:
-        """Record closing a position."""
+    def close_position(self, candidate: CandidateSpread, exit_spread_cost: float, exit_date: str) -> None:
+        """
+        Record closing a position.
+
+        exit_spread_cost: cost to buy back the spread (short_mark - long_mark at exit).
+        pnl = credit received - cost to close.
+        """
         if candidate in self.state.open_positions:
             self.state.open_positions.remove(candidate)
 
         candidate.exit_date = exit_date
-        candidate.exit_price = exit_price
+        candidate.exit_price = exit_spread_cost
+        candidate.pnl = candidate.credit - exit_spread_cost
 
-        # Calculate P&L
-        if candidate.spread_type == "bull_put_credit":
-            # If expired OTM: keep full credit
-            # If closed early: credit - (short_mark - long_mark) at close
-            candidate.pnl = candidate.credit - exit_price  # simplified
-        else:
-            candidate.pnl = candidate.credit - exit_price
+        contracts = candidate.contracts or 1
+        candidate.pnl_dollars = candidate.pnl * 100 * contracts
+        self.state.daily_pnl += candidate.pnl_dollars
+        self.state.weekly_pnl += candidate.pnl_dollars
 
-        # Track daily/weekly
-        pnl_val = candidate.pnl * 100 * self.position_size(candidate) if candidate.pnl else 0
-        self.state.daily_pnl += pnl_val
-        self.state.weekly_pnl += pnl_val
-
-        # Set result
-        if candidate.pnl and candidate.pnl > 0:
+        if candidate.pnl > 0:
             candidate.trade_result = "win"
-        elif candidate.pnl and candidate.pnl < -candidate.max_loss * 0.5:
+        elif candidate.pnl < 0:
             candidate.trade_result = "loss"
         else:
-            candidate.trade_result = "partial_win"
+            candidate.trade_result = "scratch"
 
     def reset_daily(self) -> None:
         """Reset daily P&L counter."""
@@ -170,11 +170,9 @@ def apply_risk_filter(
         if allowed:
             c.tag(f"risk:approved ({reason})")
             approved.append(c)
+            break  # only take top candidate per cycle
         else:
             c.reject("risk", reason)
-        # Only take top approved trade per cycle (one at a time)
-        if approved:
-            break
 
     if approved:
         contracts = risk_mgr.position_size(approved[0])

@@ -94,7 +94,20 @@ def apply_earnings_filter(
         return candidates
 
     earnings_dates = load_earnings_calendar(config)
-    kept: list[CandidateSpread] = []
+
+    # Warn when the calendar may be exhausted
+    all_dates = [d for dates in earnings_dates.values() for d in dates]
+    if all_dates:
+        from datetime import date as _date
+        latest = max(all_dates)
+        try:
+            if _date.fromisoformat(latest) < _date.today():
+                logger.warning(
+                    f"Earnings calendar may be exhausted — latest date is {latest}. "
+                    "Earnings filtering is inactive past this date."
+                )
+        except ValueError:
+            pass
 
     for c in candidates:
         in_blackout, reason = is_in_blackout(
@@ -104,7 +117,7 @@ def apply_earnings_filter(
             c.reject("earnings", reason)
         else:
             c.tag("earnings:clear")
-            kept.append(c)
 
-    logger.info(f"Earnings filter: {len(kept)}/{len(candidates)} candidates passed")
-    return kept
+    passed_count = sum(1 for c in candidates if c.passed)
+    logger.info(f"Earnings filter: {passed_count}/{len(candidates)} candidates passed")
+    return candidates

@@ -38,7 +38,11 @@ def detect_walls(
     # Aggregate OI and volume by strike
     strike_stats: dict[float, dict] = {}
     for row in strike_data:
-        strike = float(row.get("strike", 0))
+        raw_strike = row.get("strike", 0)
+        try:
+            strike = float(raw_strike) if raw_strike is not None else 0.0
+        except (TypeError, ValueError):
+            continue
         pc = row.get("put_call", "")
         oi = int(row.get("total_oi", 0) or 0)
         vol = int(row.get("total_volume", 0) or 0)
@@ -119,7 +123,11 @@ def fetch_strike_data_from_rows(
     """
     agg: dict[tuple[float, str], dict] = {}
     for row in rows:
-        strike = float(row.get("strike", 0))
+        raw_strike = row.get("strike", 0)
+        try:
+            strike = float(raw_strike) if raw_strike is not None else 0.0
+        except (TypeError, ValueError):
+            continue
         pc = row.get("put_call", "")
         key = (strike, pc)
 

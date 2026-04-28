@@ -90,9 +90,19 @@ class RiskConfig:
     enabled: bool = True
     bankroll: float = 50000.0
     risk_per_trade_pct: float = 0.03  # 3%
-    max_positions: int = 4
+    max_positions: int = 1  # non-overlap default; set higher for concurrent positions
     daily_loss_limit: float = 500.0
     weekly_loss_limit: float = 1000.0
+
+
+@dataclass
+class StopLossConfig:
+    """Module 9: Stop-loss and profit target settings."""
+    enabled: bool = True
+    stop_loss_pct: float = 50.0       # close if unrealized loss > X% of max loss
+    profit_target_pct: float = 75.0   # close if unrealized profit > X% of credit
+    max_hold_days: int = 0            # 0 = no limit
+    min_hold_days: int = 1            # don't stop out in first N days
 
 
 @dataclass
@@ -107,6 +117,7 @@ class PipelineConfig:
     proximity: ProximityConfig = field(default_factory=ProximityConfig)
     scoring: ScoringConfig = field(default_factory=ScoringConfig)
     risk: RiskConfig = field(default_factory=RiskConfig)
+    stop_loss: StopLossConfig = field(default_factory=StopLossConfig)
 
     # Backtest settings
     db_url: str = "postgresql://trader:changeme@localhost:5433/options"
@@ -129,6 +140,7 @@ class PipelineConfig:
             ("Walls", self.walls.enabled),
             ("Proximity", self.proximity.enabled),
             ("Scoring", self.scoring.enabled),
+            ("Stop-Loss", self.stop_loss.enabled),
             ("Risk", self.risk.enabled),
         ]
         active = [name for name, on in modules if on]
