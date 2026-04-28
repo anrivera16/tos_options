@@ -1,7 +1,7 @@
 services:
   # ============================================================
   #  OPTIONS SCANNER + POSITION TRACKER
-  #  
+  #
   #  Usage:
   #    docker compose up -d db                    # start postgres
   #    docker compose run --rm scraper            # single scrape
