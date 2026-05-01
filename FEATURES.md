@@ -279,6 +279,7 @@ Storage projections: 40-80 GB/year. 2.27TB desktop disk handles 2-3 years, but q
 -- DONE: captured_at type fixed (text → timestamptz)
 -- DONE: 4 new indexes added
 -- DONE: all ::timestamp casts removed from Python code
+-- DONE: 11 new columns added to option_contracts
 -- DB size: 1673 MB → 2077 MB (+404 MB from indexes)
 -- All 10,282 snapshots + 4M contracts preserved
 ```
@@ -288,6 +289,29 @@ Verified:
 - Time-range queries use Bitmap Index Scan (0.175ms vs sequential scan)
 - All 9 indexes present on option_contracts + snapshots
 - 35 `::timestamp` casts removed from 9 Python files
+- 11 new columns added, confirmed data flows from Schwab API
+
+### Tier 1 Data Quality Notes (from live verification)
+
+| Field | Populated? | Notes |
+|---|---|---|
+| bid_size | Always 0 | Schwab static API doesn't populate this. Not usable for liquidity flow. |
+| ask_size | Always 0 | Same as bid_size. |
+| last_size | Yes (0-5) | Works. Shows trade size of last print. |
+| open_price | NULL | Not returned by Schwab option chain endpoint. |
+| high_price | NULL | Not returned by Schwab option chain endpoint. |
+| low_price | NULL | Not returned by Schwab option chain endpoint. |
+| close_price | NULL | Not returned by Schwab option chain endpoint. |
+| percent_change | Yes | Works well — real intraday premium momentum. |
+| theoretical_option_value | Yes | Works — Schwab's model fair value. |
+| time_value | Yes | Works — premium decomposition. |
+| intrinsic_value | Yes | Works — verified against strike vs underlying. |
+
+**Impact on features:**
+- Liquidity Flow Imbalance (Feature #1): bid_size/ask_size not usable from static API. Use last_size + volume delta between snapshots instead.
+- Premium Momentum (Feature #2): percent_change works. OHLC not available — can't build full velocity signals from chain data alone.
+- Mispricing Detector (Feature #6): theoretical_option_value works. Compare vs mark price.
+- Premium Decomposition: time_value and intrinsic_value work. Useful for filtering — prefer spreads where most premium is time value (higher theta decay).
 
 ### Deferred (not urgent)
 
