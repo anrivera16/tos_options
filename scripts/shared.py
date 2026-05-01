@@ -83,8 +83,10 @@ def check_scraper_heartbeat(db_url: str | None = None, stale_minutes: int = HEAR
             ).fetchone()
             if not row or not row[0]:
                 return "No snapshots found in DB at all"
-            # captured_at is stored as ISO text
-            last_ts = datetime.fromisoformat(row[0])
+            # captured_at is now TIMESTAMPTZ — psycopg returns datetime directly
+            last_ts = row[0]
+            if isinstance(last_ts, str):
+                last_ts = datetime.fromisoformat(last_ts)
             now_utc = datetime.now(ZoneInfo("UTC"))
             # captured_at may or may not have tzinfo — treat as UTC
             if last_ts.tzinfo is None:
