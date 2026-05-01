@@ -110,7 +110,7 @@ def check_database():
 
     # 4. Snapshots today
     today_count = _db_query(
-        "SELECT COUNT(*) FROM snapshots WHERE captured_at::timestamp >= CURRENT_DATE;"
+        "SELECT COUNT(*) FROM snapshots WHERE captured_at >= CURRENT_DATE;"
     )
     today_count = int(today_count) if today_count and today_count.isdigit() else 0
     print(f"    Today's snapshots: {today_count:,}")
@@ -119,7 +119,7 @@ def check_database():
     today_contracts = _db_query("""
         SELECT COUNT(*) FROM option_contracts oc
         JOIN snapshots s ON oc.snapshot_id = s.id
-        WHERE s.captured_at::timestamp >= CURRENT_DATE;
+        WHERE s.captured_at >= CURRENT_DATE;
     """)
     today_contracts = int(today_contracts) if today_contracts and today_contracts.isdigit() else 0
     print(f"    Today's contracts: {today_contracts:,}")
@@ -128,7 +128,7 @@ def check_database():
     symbols = _db_query("""
         SELECT s.symbol, COUNT(DISTINCT s.id) as snaps
         FROM snapshots s
-        WHERE s.captured_at::timestamp >= CURRENT_DATE
+        WHERE s.captured_at >= CURRENT_DATE
         GROUP BY s.symbol
         ORDER BY snaps DESC;
     """)
@@ -142,7 +142,7 @@ def check_database():
     # 7. Freshness — snapshots in last 30 min
     recent = _db_query("""
         SELECT COUNT(*) FROM snapshots
-        WHERE captured_at::timestamp >= NOW() - INTERVAL '30 minutes';
+        WHERE captured_at >= NOW() - INTERVAL '30 minutes';
     """)
     recent = int(recent) if recent and recent.isdigit() else 0
 
@@ -286,7 +286,7 @@ def print_troubleshooting():
     print()
     print("  5. DATABASE:")
     print("     docker compose exec -T db psql -U trader -d options")
-    print("     SELECT COUNT(*) FROM snapshots WHERE captured_at::timestamp >= CURRENT_DATE;")
+    print("     SELECT COUNT(*) FROM snapshots WHERE captured_at >= CURRENT_DATE;")
 
 
 # ── Main ──────────────────────────────────────────────────────────

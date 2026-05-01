@@ -182,7 +182,7 @@ def fetch_price_history(
                 underlying_price, captured_at::date as day
             FROM snapshots
             WHERE symbol = {ph}
-            AND captured_at::timestamp >= NOW() - INTERVAL '1 day' * {ph}
+            AND captured_at >= NOW() - INTERVAL '1 day' * {ph}
             AND underlying_price IS NOT NULL
             ORDER BY captured_at::date, captured_at DESC
         """
@@ -233,7 +233,7 @@ def fetch_atm_iv_history(
                 AND oc.put_call = 'PUT'
                 AND oc.volatility IS NOT NULL
                 AND s.underlying_price IS NOT NULL
-                AND s.captured_at::timestamp >= NOW() - INTERVAL '1 day' * {ph}
+                AND s.captured_at >= NOW() - INTERVAL '1 day' * {ph}
             ) oc
             WHERE rn = 1
             ORDER BY captured_at

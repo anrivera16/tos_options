@@ -36,7 +36,7 @@ def fetch_data(conn):
     cur.execute("""
         SELECT id, underlying_price, captured_at
         FROM snapshots WHERE symbol = 'SPY'
-        ORDER BY captured_at::timestamp DESC LIMIT 1
+        ORDER BY captured_at DESC LIMIT 1
     """)
     snap_id, price, ts = cur.fetchone()
 
@@ -58,7 +58,7 @@ def fetch_data(conn):
             underlying_price, captured_at::date as day
         FROM snapshots
         WHERE symbol = 'SPY'
-        AND captured_at::timestamp >= NOW() - INTERVAL '30 days'
+        AND captured_at >= NOW() - INTERVAL '30 days'
         AND underlying_price IS NOT NULL
         ORDER BY captured_at::date, captured_at DESC
     """)
@@ -76,7 +76,7 @@ def fetch_data(conn):
             JOIN snapshots s ON oc.snapshot_id = s.id
             WHERE s.symbol = 'SPY' AND oc.put_call = 'PUT'
             AND oc.volatility IS NOT NULL AND s.underlying_price IS NOT NULL
-            AND s.captured_at::timestamp >= NOW() - INTERVAL '30 days'
+            AND s.captured_at >= NOW() - INTERVAL '30 days'
         ) oc WHERE rn = 1 ORDER BY captured_at
     """)
     ivs = [float(r[0]) for r in cur.fetchall() if r[0]]

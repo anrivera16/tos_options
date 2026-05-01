@@ -229,7 +229,7 @@ def run_scanner(conn, scanner_name: str, config: dict, tickers: list[str] | None
     if pg:
         subq = """
             SELECT id FROM snapshots s1
-            WHERE captured_at::timestamp >= NOW() - INTERVAL '20 minutes'
+            WHERE captured_at >= NOW() - INTERVAL '20 minutes'
             AND captured_at = (
                 SELECT MAX(s2.captured_at) 
                 FROM snapshots s2 

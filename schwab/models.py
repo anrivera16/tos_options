@@ -27,6 +27,21 @@ class OptionContractRow:
     open_interest: int | None
     total_volume: int | None
     in_the_money: bool | None
+    # Tier 1: liquidity flow
+    bid_size: int | None
+    ask_size: int | None
+    last_size: int | None
+    # Tier 1: premium momentum
+    open_price: float | None
+    high_price: float | None
+    low_price: float | None
+    close_price: float | None
+    percent_change: float | None
+    # Tier 1: mispricing detection
+    theoretical_option_value: float | None
+    # Tier 1: premium decomposition
+    time_value: float | None
+    intrinsic_value: float | None
     raw: dict[str, Any]
 
     def to_dict(self) -> dict[str, Any]:
@@ -118,6 +133,21 @@ def flatten_option_chain(chain_data: dict[str, Any], symbol: str) -> list[Option
                             open_interest=_safe_int(contract.get("openInterest")),
                             total_volume=_safe_int(contract.get("totalVolume")),
                             in_the_money=contract.get("inTheMoney"),
+                            # Tier 1: liquidity flow
+                            bid_size=_safe_int(contract.get("bidSize")),
+                            ask_size=_safe_int(contract.get("askSize")),
+                            last_size=_safe_int(contract.get("lastSize")),
+                            # Tier 1: premium momentum
+                            open_price=_safe_float(contract.get("open")),
+                            high_price=_safe_float(contract.get("high")),
+                            low_price=_safe_float(contract.get("low")),
+                            close_price=_safe_float(contract.get("close")),
+                            percent_change=_safe_float(contract.get("percentChange")),
+                            # Tier 1: mispricing detection
+                            theoretical_option_value=_safe_float(contract.get("theoreticalOptionValue")),
+                            # Tier 1: premium decomposition
+                            time_value=_safe_float(contract.get("timeValue")),
+                            intrinsic_value=_safe_float(contract.get("intrinsicValue")),
                             raw=contract,
                         )
                     )

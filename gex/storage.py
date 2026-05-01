@@ -73,6 +73,20 @@ def init_db(connection) -> None:
                 open_interest INTEGER,
                 total_volume INTEGER,
                 in_the_money INTEGER,
+                -- Tier 1: liquidity flow
+                bid_size INTEGER,
+                ask_size INTEGER,
+                last_size INTEGER,
+                -- Tier 1: premium momentum
+                open_price DOUBLE PRECISION,
+                high_price DOUBLE PRECISION,
+                low_price DOUBLE PRECISION,
+                close_price DOUBLE PRECISION,
+                percent_change DOUBLE PRECISION,
+                -- Tier 1: mispricing + decomposition
+                theoretical_option_value DOUBLE PRECISION,
+                time_value DOUBLE PRECISION,
+                intrinsic_value DOUBLE PRECISION,
                 raw_json TEXT,
                 FOREIGN KEY(snapshot_id) REFERENCES snapshots(id) ON DELETE CASCADE
             );
@@ -166,6 +180,20 @@ def init_db(connection) -> None:
                 open_interest INTEGER,
                 total_volume INTEGER,
                 in_the_money INTEGER,
+                -- Tier 1: liquidity flow
+                bid_size INTEGER,
+                ask_size INTEGER,
+                last_size INTEGER,
+                -- Tier 1: premium momentum
+                open_price REAL,
+                high_price REAL,
+                low_price REAL,
+                close_price REAL,
+                percent_change REAL,
+                -- Tier 1: mispricing + decomposition
+                theoretical_option_value REAL,
+                time_value REAL,
+                intrinsic_value REAL,
                 raw_json TEXT,
                 FOREIGN KEY(snapshot_id) REFERENCES snapshots(id) ON DELETE CASCADE
             );
@@ -310,6 +338,20 @@ def insert_option_contracts(
                 else 0
                 if row.get("in_the_money") is not None
                 else None,
+                # Tier 1: liquidity flow
+                row.get("bid_size"),
+                row.get("ask_size"),
+                row.get("last_size"),
+                # Tier 1: premium momentum
+                row.get("open_price"),
+                row.get("high_price"),
+                row.get("low_price"),
+                row.get("close_price"),
+                row.get("percent_change"),
+                # Tier 1: mispricing + decomposition
+                row.get("theoretical_option_value"),
+                row.get("time_value"),
+                row.get("intrinsic_value"),
                 raw,
             )
         )
@@ -319,7 +361,12 @@ def insert_option_contracts(
         "snapshot_id", "snapshot_captured_at", "symbol", "underlying_symbol",
         "underlying_price", "expiration_date", "dte", "strike", "put_call",
         "bid", "ask", "last", "mark", "delta", "gamma", "theta", "vega",
-        "volatility", "open_interest", "total_volume", "in_the_money", "raw_json",
+        "volatility", "open_interest", "total_volume", "in_the_money",
+        # Tier 1 columns
+        "bid_size", "ask_size", "last_size",
+        "open_price", "high_price", "low_price", "close_price", "percent_change",
+        "theoretical_option_value", "time_value", "intrinsic_value",
+        "raw_json",
     ]
     placeholders = ", ".join([ph] * len(columns))
     col_str = ", ".join(columns)

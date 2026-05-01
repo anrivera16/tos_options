@@ -42,7 +42,7 @@ def get_spot(conn, symbol: str) -> float | None:
         SELECT underlying_price AS spot
         FROM snapshots
         WHERE symbol LIKE %s
-        ORDER BY captured_at::timestamp DESC
+        ORDER BY captured_at DESC
         LIMIT 1
     """, (f"{symbol}%",))
     return rows[0]["spot"] if rows else None
@@ -66,8 +66,8 @@ def resolve_strike(conn, symbol: str, strike: float | None,
             WHERE s.symbol LIKE %s
               AND oc.put_call = %s
               AND oc.delta IS NOT NULL
-              AND s.captured_at::timestamp = (
-                  SELECT MAX(captured_at::timestamp) FROM snapshots WHERE symbol LIKE %s
+              AND s.captured_at = (
+                  SELECT MAX(captured_at) FROM snapshots WHERE symbol LIKE %s
               )
             ORDER BY ABS(oc.delta - %s), oc.dte
             LIMIT 1
@@ -88,8 +88,8 @@ def get_iv_term_structure(conn, symbol: str, strike: float,
 
     if snapshot_filter == "latest":
         filter_sql = """
-            AND s.captured_at::timestamp = (
-                SELECT MAX(captured_at::timestamp)
+            AND s.captured_at = (
+                SELECT MAX(captured_at)
                 FROM snapshots WHERE symbol LIKE %s
             )
         """
@@ -98,8 +98,8 @@ def get_iv_term_structure(conn, symbol: str, strike: float,
         # avg_today: average across all snapshots from the most recent trading day
         # Uses MAX date to avoid CURRENT_DATE timezone issues (DB is UTC)
         filter_sql = """
-            AND DATE(s.captured_at::timestamp) = (
-                SELECT DATE(MAX(captured_at::timestamp))
+            AND DATE(s.captured_at) = (
+                SELECT DATE(MAX(captured_at))
                 FROM snapshots WHERE symbol LIKE %s
             )
         """
@@ -276,8 +276,8 @@ def get_iv_matrix(conn, symbol: str, put_call: str,
 
     if snapshot_filter == "latest":
         filter_sql = """
-            AND s.captured_at::timestamp = (
-                SELECT MAX(captured_at::timestamp)
+            AND s.captured_at = (
+                SELECT MAX(captured_at)
                 FROM snapshots WHERE symbol LIKE %s
             )
         """
@@ -286,8 +286,8 @@ def get_iv_matrix(conn, symbol: str, put_call: str,
         # avg_today: average across all snapshots from the most recent trading day
         # Uses MAX date to avoid CURRENT_DATE timezone issues (DB is UTC)
         filter_sql = """
-            AND DATE(s.captured_at::timestamp) = (
-                SELECT DATE(MAX(captured_at::timestamp))
+            AND DATE(s.captured_at) = (
+                SELECT DATE(MAX(captured_at))
                 FROM snapshots WHERE symbol LIKE %s
             )
         """

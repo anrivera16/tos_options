@@ -43,7 +43,7 @@ def fetch_data(conn):
     cur.execute("""
         SELECT id, underlying_price, captured_at
         FROM snapshots WHERE symbol = 'SPY'
-        ORDER BY captured_at::timestamp DESC LIMIT 1
+        ORDER BY captured_at DESC LIMIT 1
     """)
     row = cur.fetchone()
     if not row:
@@ -70,7 +70,7 @@ def fetch_data(conn):
             underlying_price, captured_at::date as day
         FROM snapshots
         WHERE symbol = 'SPY'
-        AND captured_at::timestamp >= NOW() - INTERVAL '30 days'
+        AND captured_at >= NOW() - INTERVAL '30 days'
         AND underlying_price IS NOT NULL
         ORDER BY captured_at::date, captured_at DESC
     """)
@@ -83,11 +83,11 @@ def fetch_data(conn):
     IV_DTE = 14  # fixed DTE for consistent comparison
     cur.execute("""
         SELECT day, iv FROM (
-            SELECT date(s.captured_at::timestamp) as day,
+            SELECT date(s.captured_at) as day,
                    oc.volatility as iv,
                    ROW_NUMBER() OVER (
-                       PARTITION BY date(s.captured_at::timestamp)
-                       ORDER BY s.captured_at::timestamp DESC,
+                       PARTITION BY date(s.captured_at)
+                       ORDER BY s.captured_at DESC,
                                 ABS(oc.strike - s.underlying_price)
                    ) as rn
             FROM option_contracts oc

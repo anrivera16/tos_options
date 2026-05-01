@@ -16,7 +16,7 @@ cur.execute("""
     SELECT id, underlying_price, captured_at
     FROM snapshots
     WHERE symbol = 'SPY'
-    ORDER BY captured_at::timestamp DESC
+    ORDER BY captured_at DESC
     LIMIT 1
 """)
 snap = cur.fetchone()

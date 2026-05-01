@@ -27,7 +27,7 @@ def query_decay_data(symbol, strike, put_call, dte):
     """Get mark price at each snapshot throughout the day for a specific contract."""
     q = f"""
     SELECT 
-        s.captured_at::timestamp AS ts,
+        s.captured_at AS ts,
         oc.mark,
         oc.bid,
         oc.ask,
@@ -41,8 +41,8 @@ def query_decay_data(symbol, strike, put_call, dte):
       AND oc.strike = {strike}
       AND oc.put_call = '{put_call}'
       AND oc.dte = {dte}
-      AND s.captured_at::timestamp >= '2026-04-21'
-    ORDER BY s.captured_at::timestamp;
+      AND s.captured_at >= '2026-04-21'
+    ORDER BY s.captured_at;
     """
     raw = run_query(q)
     rows = []
