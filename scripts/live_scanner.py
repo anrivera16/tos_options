@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import math
 import os
 import signal
 import sys
@@ -84,6 +85,11 @@ class ScannerHit:
     dist_otm: float
     credit_est: float
     score: float
+    # Tier 1: new features
+    percent_change: float | None
+    theoretical_value: float | None
+    time_value: float | None
+    intrinsic_value: float | None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -105,6 +111,10 @@ class ScannerHit:
             "dist_otm": self.dist_otm,
             "credit_est": self.credit_est,
             "score": self.score,
+            "percent_change": self.percent_change,
+            "theoretical_value": self.theoretical_value,
+            "time_value": self.time_value,
+            "intrinsic_value": self.intrinsic_value,
         }
 
 
@@ -262,7 +272,11 @@ def run_scanner(conn, scanner_name: str, config: dict, tickers: list[str] | None
             oc.ask,
             oc.mark,
             oc.total_volume,
-            oc.open_interest
+            oc.open_interest,
+            oc.percent_change,
+            oc.theoretical_option_value,
+            oc.time_value,
+            oc.intrinsic_value
         FROM option_contracts oc
         JOIN snapshots s ON oc.snapshot_id = s.id
         WHERE s.id IN ({subq})
@@ -285,7 +299,7 @@ def run_scanner(conn, scanner_name: str, config: dict, tickers: list[str] | None
 
     hits: list[ScannerHit] = []
     for row in rows:
-        sym, underlying, strike, pc, dte, delta, theta, vega, iv, bid, ask, mark, vol, oi = row
+        sym, underlying, strike, pc, dte, delta, theta, vega, iv, bid, ask, mark, vol, oi, pct_chg, theo_val, t_val, i_val = row
         underlying = float(underlying) if underlying else 0
         strike = float(strike) if strike else 0
         delta = float(delta) if delta else 0
@@ -308,7 +322,6 @@ def run_scanner(conn, scanner_name: str, config: dict, tickers: list[str] | None
         # Score = premium richness * liquidity
         oi_i = _safe_int(oi) or 0
         vol_i = _safe_int(vol) or 0
-        import math
         oi_norm = min(max((math.log10(max(oi_i, 1)) - 2) / 2, 0), 1)
         delta_norm = abs_delta / 0.25  # 0.25 delta = 1.0
         score = round(credit_est * (1 + oi_norm) * (1 + delta_norm), 2)
@@ -332,6 +345,11 @@ def run_scanner(conn, scanner_name: str, config: dict, tickers: list[str] | None
             dist_otm=round(dist_otm, 1),
             credit_est=credit_est,
             score=score,
+            # Tier 1
+            percent_change=_safe_float(pct_chg),
+            theoretical_value=_safe_float(theo_val),
+            time_value=_safe_float(t_val),
+            intrinsic_value=_safe_float(i_val),
         ))
 
     return hits
@@ -373,28 +391,54 @@ def format_hits(hits: list[ScannerHit], scanner_name: str) -> str:
 def format_discord_message(all_hits: dict[str, list[ScannerHit]], now_str: str) -> str:
     """Format hits for Discord (compact, fits 2000 chars)."""
     lines = []
-    lines.append(f"**Scanner Alert** {now_str}")
+    total = sum(len(h) for h in all_hits.values())
+    scanners_with_hits = sum(1 for h in all_hits.values() if h)
+    lines.append(f"**Scanner** {now_str} | **{total}** hits across **{scanners_with_hits}** filters")
     lines.append("```")
 
     for scanner_name, hits in all_hits.items():
         if not hits:
             continue
-        lines.append(f"--- {scanner_name} ({len(hits)} hits) ---")
+        # Shorten scanner names for display
+        short_name = scanner_name.replace("0DTE_", "0d_").replace("1DTE_", "1d_")
+        lines.append(f"[{short_name}] {len(hits)} hit{'s' if len(hits) > 1 else ''}")
         lines.append(
-            f"{'Sym':<5} {'PC':<4} {'K':>6} {'Spot':>6} {'DTE':>3} "
-            f"{'Dlt':>4} {'IV':>4} {'Mrk':>5} {'Vol':>6} {'OI':>6} {'Crd':>4}"
+            f"{'Sym':<5} {'P/C':<3} {'Strk':>6} {'DTE':>3} {'Δ':>4} "
+            f"{'IV':>4} {'$':>5} {'Δ%':>5} {'MisP':>4} {'OI':>6}"
         )
 
         for h in hits[:5]:
-            iv_str = f"{h.iv:.0f}" if h.iv is not None else "n/a"
+            iv_str = f"{h.iv:.0f}" if h.iv is not None else " - "
+            # Premium momentum: show % change direction
+            if h.percent_change is not None:
+                pct = h.percent_change
+                if pct > 0:
+                    pct_str = f"+{pct:.0f}"
+                else:
+                    pct_str = f"{pct:.0f}"
+            else:
+                pct_str = "  - "
+            # Mispricing: how far mark deviates from theoretical
+            if h.theoretical_value is not None and h.mark is not None and h.theoretical_value > 0:
+                mispct = ((h.mark - h.theoretical_value) / h.theoretical_value) * 100
+                if mispct > 5:
+                    misp_str = "EXP "
+                elif mispct < -5:
+                    misp_str = "CHP "
+                else:
+                    misp_str = "  = "
+            else:
+                misp_str = "  - "
+
             lines.append(
-                f"{h.symbol:<5} {h.put_call:<4} {h.strike:>6.0f} {h.underlying_price:>6.0f} {h.dte:>3} "
-                f"{h.delta:>4.2f} {iv_str:>4} {h.mark or 0:>5.2f} "
-                f"{h.volume or 0:>6,} {h.open_interest or 0:>6,} {h.credit_est:>4.2f}"
+                f"{h.symbol:<5} {h.put_call[:1]:<3} {h.strike:>6.0f} {h.dte:>3} "
+                f"{h.delta:>4.2f} {iv_str:>4} {h.mark or 0:>5.2f} {pct_str:>5} "
+                f"{misp_str} {h.open_interest or 0:>6,}"
             )
         lines.append("")
 
     lines.append("```")
+    lines.append("_Δ%=premium change | MisP: EXP=expensive CHP=cheap =fair_")
 
     msg = "\n".join(lines)
     if len(msg) > 1900:
