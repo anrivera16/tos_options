@@ -455,7 +455,7 @@ def load_watchlist() -> list[dict]:
 # ---------------------------------------------------------------------------
 
 def run_scan(discord: bool = False) -> None:
-    """Run sector scanner against latest snapshots."""
+    """Run sector scanner (IV signals + flow) against latest snapshots."""
     db_url = get_db_url()
     if not is_postgres(db_url):
         logger.error("Sector scanner requires PostgreSQL connection")
@@ -470,22 +470,59 @@ def run_scan(discord: bool = False) -> None:
 
     conn = get_connection(db_url)
     try:
+        # Phase 1: IV signals
         baselines = fetch_ticker_baselines(conn, core_tickers, days=10)
-        if not baselines:
+        if baselines:
+            sectors = compute_sector_signals(baselines)
+            format_terminal(baselines, sectors)
+
+            # Phase 2: Sector flow
+            from scripts.sector_flow import fetch_sector_flow, fetch_volume_baselines
+            from scripts.sector_flow import format_flow_terminal, format_flow_discord
+
+            flow = fetch_sector_flow(conn, core_tickers)
+            flow_baselines = fetch_volume_baselines(conn, core_tickers, days=5)
+
+            # Attach volume vs avg
+            for sf in flow.sectors:
+                baseline = flow_baselines.get(sf.sector, 0)
+                if baseline > 0:
+                    sf.volume_vs_avg = round(sf.total_volume / baseline, 2)
+
+            format_flow_terminal(flow, flow_baselines)
+
+            if discord:
+                # Combine IV signals + flow into one message
+                signal_lines = format_discord_message(baselines, sectors)
+                flow_lines = format_flow_discord(flow, flow_baselines)
+
+                # Split into 2 messages if combined > 1900 chars
+                combined = signal_lines + "\n\n" + flow_lines
+                if len(combined) > 1900:
+                    # Send IV signals first
+                    try:
+                        from discord.webhook import send_message
+                        send_message(signal_lines)
+                        logger.info(f"IV signal alert sent")
+                    except Exception as exc:
+                        logger.warning(f"Discord alert failed: {exc}")
+
+                    # Send flow second
+                    try:
+                        from discord.webhook import send_message
+                        send_message(flow_lines)
+                        logger.info(f"Flow alert sent")
+                    except Exception as exc:
+                        logger.warning(f"Discord alert failed: {exc}")
+                else:
+                    try:
+                        from discord.webhook import send_message
+                        send_message(combined)
+                        logger.info("Combined IV+flow alert sent")
+                    except Exception as exc:
+                        logger.warning(f"Discord alert failed: {exc}")
+        else:
             logger.info("No data found yet — baselines will build as scraper runs")
-            return
-
-        sectors = compute_sector_signals(baselines)
-        format_terminal(baselines, sectors)
-
-        if discord:
-            msg = format_discord_message(baselines, sectors)
-            try:
-                from discord.webhook import send_message
-                send_message(msg)
-                logger.info(f"Discord alert sent ({sum(1 for b in baselines if b.signal != 'neutral')} signals)")
-            except Exception as exc:
-                logger.warning(f"Discord alert failed: {exc}")
 
     finally:
         conn.close()
