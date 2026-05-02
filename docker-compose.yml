@@ -43,6 +43,7 @@ services:
       - $$SPX
       - SPY
       - QQQ
+      - VIX
       - --interval
       - "5"
       - --db
@@ -89,6 +90,7 @@ services:
       - $$SPX
       - SPY
       - QQQ
+      - VIX
       - --db
       - postgresql://trader:${POSTGRES_PASSWORD:-changeme}@db:5432/options
     depends_on:
