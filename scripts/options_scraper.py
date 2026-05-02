@@ -29,7 +29,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-DEFAULT_TICKERS = ["SPY", "QQQ"]
+DEFAULT_TICKERS = ["SPY", "QQQ", "VIX"]
 
 RATE_LIMIT_MARKET_DATA_PER_MIN = 60
 RATE_LIMIT_TOTAL_PER_MIN = 120
