@@ -1,66 +1,155 @@
-# Universe Watchlist Configuration
+# Sector-Bucket Watchlist Configuration
 #
-# Static watchlist of stocks to evaluate daily for options trading.
-# These are pre-filtered for: optionable, liquid, and relevant to the
-# user's trading style (credit spreads on high-IV names).
+# Core tickers are ALWAYS scraped every cycle -- guarantees continuous
+# data for baseline building (mispricing, IV tracking, earnings patterns).
+# Dynamic tickers are added by the universe scanner and come/go freely.
+#
+# Each core ticker has a sector label for cross-sector analysis.
 
-# Always-index tickers (scraped every cycle regardless of score)
-indexes:
-  - $SPX
-  - SPY
-  - QQQ
+# ---------------------------------------------------------------------------
+# Core Watchlist (NEVER dropped -- 24 tickers across 8 sectors)
+# Based on: liquidity_analysis.md, correlation_analysis.md, iv_analysis.md
+# ---------------------------------------------------------------------------
 
-# Tier 1: High-conviction names -- always evaluated, likely scraped
-# if they score well.  These are the "usual suspects" with liquid
-# option chains and frequent IV opportunities.
-tier1:
-  # MAG7
-  - AAPL
-  - AMZN
-  - GOOG
-  - GOOGL
-  - META
-  - MSFT
-  - NVDA
-  - TSLA
+core:
+  # Market Indexes (3) -- baseline, market gamma regime reference
+  indexes:
+    - symbol: $SPX
+      sector: indexes
+      iv_tier: sell      # Typically high IV, premium selling target
+    - symbol: SPY
+      sector: indexes
+      iv_tier: buy       # Often cheapest IV, good for hedging/buying
+    - symbol: QQQ
+      sector: indexes
+      iv_tier: neutral
 
-  # High-beta / high-IV tech
-  - AMD
-  - NFLX
-  - CRM
-  - UBER
-  - PLTR
-  - COIN
-  - MSTR
+  # Mega-Cap Tech (5) -- market drivers, tightest spreads
+  mega_cap_tech:
+    - symbol: AAPL
+      sector: mega_cap_tech
+      iv_tier: buy       # IV rank 34, often cheap
+    - symbol: MSFT
+      sector: mega_cap_tech
+      iv_tier: neutral   # IV rank 41, fairly priced
+    - symbol: GOOGL
+      sector: mega_cap_tech
+      iv_tier: neutral
+    - symbol: META
+      sector: mega_cap_tech
+      iv_tier: sell      # High IV, good premium selling
+    - symbol: AMZN
+      sector: mega_cap_tech
+      iv_tier: neutral
 
-# Tier 2: Broader watchlist -- evaluated but only scraped if they
-# score above the threshold (unusual volume, IV spike, etc.)
+  # Semiconductors (6) -- merged original + extended (corr analysis)
+  semiconductors:
+    - symbol: NVDA
+      sector: semiconductors
+      iv_tier: sell      # High IV, strong earnings moves
+    - symbol: AMD
+      sector: semiconductors
+      iv_tier: sell      # High IV rank, good selling
+    - symbol: AVGO
+      sector: semiconductors
+      iv_tier: neutral
+    - symbol: QCOM
+      sector: semiconductors
+      iv_tier: neutral
+    - symbol: MU
+      sector: semiconductors
+      iv_tier: sell      # Memory cycle, IV spikes
+    - symbol: INTC
+      sector: semiconductors
+      iv_tier: sell      # IV rank 58, restructuring
+
+  # Fintech/Crypto (4) -- highest IV in market, BTC-correlated
+  fintech_crypto:
+    - symbol: MSTR
+      sector: fintech_crypto
+      iv_tier: sell      # IV 82%, rank 72, biggest crush
+    - symbol: COIN
+      sector: fintech_crypto
+      iv_tier: sell      # IV 68%, rank 65
+    - symbol: HOOD
+      sector: fintech_crypto
+      iv_tier: sell      # IV 58%, rank 58
+    - symbol: MARA
+      sector: fintech_crypto
+      iv_tier: sell      # IV 77%, rank 68, biggest crush
+
+  # Consumer/Retail (3) -- earnings sensitive, retail-driven
+  consumer_retail:
+    - symbol: TSLA
+      sector: consumer_retail
+      iv_tier: sell      # High IV, huge earnings moves
+    - symbol: UBER
+      sector: consumer_retail
+      iv_tier: neutral
+    - symbol: LULU
+      sector: consumer_retail
+      iv_tier: sell      # High IV rank, earnings sensitive
+
+  # Healthcare/Biotech (3) -- catalyst-driven, best diversifier
+  healthcare:
+    - symbol: TMO
+      sector: healthcare
+      iv_tier: buy       # IV rank 28 (lowest), cheapest IV
+    - symbol: VRTX
+      sector: healthcare
+      iv_tier: buy       # IV rank 32, often cheap
+    - symbol: LLY
+      sector: healthcare
+      iv_tier: neutral   # GLP-1 narrative, high liquidity
+
+  # Industrials/Energy (3) -- sector rotation, macro signals
+  industrials_energy:
+    - symbol: GE
+      sector: industrials_energy
+      iv_tier: sell      # IV rank 55, above avg
+    - symbol: CAT
+      sector: industrials_energy
+      iv_tier: buy       # IV rank 42, buys on economic cycle
+    - symbol: XOM
+      sector: industrials_energy
+      iv_tier: buy       # IV rank 38, cheapest energy name
+
+  # Growth/Tech (3) -- high IV growth names
+  growth_tech:
+    - symbol: PLTR
+      sector: growth_tech
+      iv_tier: sell      # Retail-heavy, high IV
+    - symbol: PANW
+      sector: growth_tech
+      iv_tier: neutral   # Cyber security, steady
+    - symbol: SNOW
+      sector: growth_tech
+      iv_tier: neutral   # Declining liquidity, monitor
+
+# ---------------------------------------------------------------------------
+# Dynamic Tiers (scored by universe scanner, come and go)
+# ---------------------------------------------------------------------------
+
 tier2:
-  # Semis
-  - AVGO
+  # Semis (additional)
   - MRVL
   - ON
   - MPWR
-  - INTC
   # Financials
   - JPM
   - GS
-  - HOOD
   - SOFI
   # Energy / Uranium
-  - XOM
   - CVX
   - CCJ
   - OKLO
   - SMR
   # Consumer
-  - AMZN
   - COST
   - WMT
   - TGT
   - HD
   - LOW
-  - LULU
   - NKE
   - SBUX
   - CMG
@@ -68,7 +157,6 @@ tier2:
   # Pharma / Biotech
   - PFE
   - MRK
-  - LLY
   - ABBV
   # EV / Auto
   - F
@@ -77,7 +165,6 @@ tier2:
   - LCID
   - NIO
   # Crypto-adjacent
-  - MARA
   - RIOT
   # Small/mid cap momentum
   - RKLB
@@ -98,12 +185,10 @@ tier2:
   - PINS
   # Cyber / SaaS
   - CRWD
-  - PANW
   - ZS
   - DDOG
   - MDB
   - NET
-  - SNOW
   - VEEV
   # Solar / Clean energy
   - ENPH
@@ -111,36 +196,33 @@ tier2:
   - FSLR
   - RUN
 
+# ---------------------------------------------------------------------------
 # Movers sources -- auto-discover high-activity names each morning
 # Valid: $SPX, $DJI, $COMPX, NASDAQ, NYSE, EQUITY_ALL
+# ---------------------------------------------------------------------------
 movers_sources:
   - symbol: "$SPX"
-    sort: "volume"         # top volume movers in S&P 500
+    sort: "volume"
     limit: 15
   - symbol: "NASDAQ"
-    sort: "percent_up"     # biggest gainers on Nasdaq
+    sort: "percent_up"
     limit: 10
 
-# Scoring weights (tune these to change selection behavior)
+# ---------------------------------------------------------------------------
+# Scoring weights (universe scanner)
+# ---------------------------------------------------------------------------
 scoring:
-  # Relative volume vs 10-day avg (0-3 points)
   rel_volume_weight: 3.0
-  # Absolute daily volume in millions (0-2 points)
   abs_volume_weight: 2.0
-  # Proximity to 52-week extremes (0-2 points)
   range_position_weight: 2.0
-  # Price move magnitude today (0-2 points)
   daily_move_weight: 2.0
-  # Mover bonus: appeared in top movers list (0-1 points)
   mover_bonus: 1.0
 
+# ---------------------------------------------------------------------------
 # Thresholds
+# ---------------------------------------------------------------------------
 thresholds:
-  # Minimum score to be selected for scraping
   min_score: 4.0
-  # Maximum number of individual names to scrape per cycle
   max_names: 8
-  # Minimum average 10-day volume (shares) to be considered
   min_avg_volume: 1000000
-  # Must be optionable
   require_optionable: true

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from pathlib import Path
 from typing import Any
 
-DEFAULT_DB_PATH = "out/options_history.sqlite3"
+DEFAULT_DB_PATH = os.environ.get("DATABASE_URL", "out/options_history.sqlite3")
 
 
 def _is_postgres(db_path: str) -> bool:

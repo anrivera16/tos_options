@@ -3,14 +3,23 @@
 TOS Options System Status Check
 
 Verifies Docker services, database health, data freshness, and auth status.
-Run:  python scripts/status_check.py
+Run:  python scripts/status_check.py              # Docker-based (on desktop)
+      python scripts/status_check.py --remote-db  # Direct DB via DATABASE_URL (Mac/laptop)
       python scripts/status_check.py --troubleshoot
 """
 
 import sys
 import subprocess
 import argparse
+import os
 from datetime import datetime, timezone, timedelta
+from pathlib import Path
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 # Eastern time for market-hour checks
 ET = timezone(timedelta(hours=-4))
@@ -289,6 +298,103 @@ def print_troubleshooting():
     print("     SELECT COUNT(*) FROM snapshots WHERE captured_at >= CURRENT_DATE;")
 
 
+# ── Remote DB mode (Mac / laptop — no Docker) ────────────────────
+
+def check_remote_db() -> bool:
+    """Direct Postgres health check over DATABASE_URL (no Docker needed)."""
+    print("  Database (remote via DATABASE_URL):")
+    db_url = os.environ.get("DATABASE_URL")
+    if not db_url:
+        print("    DATABASE_URL not set — run: export $(cat .env | xargs)")
+        return False
+
+    host = db_url.split("@")[-1].split("/")[0] if "@" in db_url else "unknown"
+    print(f"    Host: {host}")
+
+    try:
+        import psycopg
+        conn = psycopg.connect(db_url, connect_timeout=5)
+    except Exception as e:
+        print(f"    Cannot connect: {e}")
+        print("    Check: is desktop on? Tailscale connected? Docker db service running?")
+        return False
+
+    try:
+        cur = conn.cursor()
+
+        cur.execute("SELECT COUNT(*), MAX(captured_at) FROM snapshots")
+        total, latest = cur.fetchone()
+        age_min = (datetime.now(timezone.utc) - latest).total_seconds() / 60 if latest else None
+        print(f"    Snapshots total: {total:,}")
+        print(f"    Latest snapshot: {latest}  (age: {age_min:.0f} min)" if age_min is not None else f"    Latest snapshot: none")
+
+        cur.execute("SELECT COUNT(*) FROM option_contracts")
+        print(f"    Contracts total: {cur.fetchone()[0]:,}")
+
+        cur.execute("""
+            SELECT symbol, COUNT(*) AS n, MAX(captured_at) AS latest
+            FROM snapshots
+            WHERE captured_at >= NOW() - INTERVAL '7 days'
+            GROUP BY symbol ORDER BY n DESC LIMIT 10
+        """)
+        rows = cur.fetchall()
+        if rows:
+            print("    Last 7d by symbol:")
+            for sym, n, sym_latest in rows:
+                print(f"      {sym:<10} {n:>5} snaps  latest {sym_latest}")
+
+        now_et = datetime.now(ET)
+        is_market_hours = now_et.weekday() < 5 and 9 <= now_et.hour < 16
+        if age_min is not None and age_min > 30 and is_market_hours:
+            print("    STALE: no new data in 30 min (market is open!)")
+            return False
+        elif age_min is not None and age_min > 60 * 18:
+            print("    STALE: latest snapshot > 18h old")
+            return False
+        return True
+    finally:
+        conn.close()
+
+
+def check_remote_auth() -> bool:
+    """Check Schwab token freshness from local ~/.schwabdev or .schwabdev/."""
+    print("  Authentication:")
+    candidates = [
+        Path.home() / ".schwabdev",
+        Path(".schwabdev"),
+        Path("/root/.schwabdev"),
+    ]
+    token_file = None
+    for d in candidates:
+        if d.exists():
+            for f in d.iterdir():
+                if f.suffix == ".json":
+                    token_file = f
+                    break
+        if token_file:
+            break
+
+    if not token_file:
+        print("    No local token file found (tokens live in Docker on desktop)")
+        print("    To re-auth: docker compose run --rm cli auth  (run on desktop)")
+        return True  # not a failure — expected from Mac
+
+    import json, stat
+    age_days = (datetime.now().timestamp() - token_file.stat().st_mtime) / 86400
+    print(f"    Token file: {token_file}  (modified {age_days:.1f}d ago)")
+    try:
+        data = json.loads(token_file.read_text())
+        exp = data.get("expires_at") or data.get("refresh_token_expires_at")
+        if exp:
+            print(f"    Expires: {exp}")
+    except Exception:
+        pass
+    if age_days > 6:
+        print("    WARNING: token may be near expiry (>6 days old) — re-auth soon")
+        return False
+    return True
+
+
 # ── Main ──────────────────────────────────────────────────────────
 
 def main():
@@ -297,29 +403,38 @@ def main():
     )
     parser.add_argument("--troubleshoot", action="store_true",
                         help="Always show troubleshooting guide")
+    parser.add_argument("--remote-db", "-r", action="store_true",
+                        help="Skip Docker; connect to DB directly via DATABASE_URL (use from Mac/laptop)")
     args = parser.parse_args()
 
     now_et = datetime.now(ET)
     print(f"TOS Options Status Check  ({now_et.strftime('%Y-%m-%d %I:%M %p ET')})")
     print("=" * 52)
 
-    services_ok = check_docker_services()
-    print()
-    db_ok = check_database()
-    print()
-    auth_ok = check_auth()
-    print()
-    activity_ok = check_recent_activity()
-
-    # Summary
-    print()
-    print("  Summary:")
-    print(f"    Docker services: {'OK' if services_ok else 'ISSUES'}")
-    print(f"    Database:        {'OK' if db_ok else 'ISSUES'}")
-    print(f"    Authentication:  {'OK' if auth_ok else 'ISSUES'}")
-    print(f"    Recent activity: {'OK' if activity_ok else 'STALE'}")
-
-    all_ok = services_ok and db_ok and auth_ok and activity_ok
+    if args.remote_db:
+        db_ok = check_remote_db()
+        print()
+        auth_ok = check_remote_auth()
+        print()
+        print("  Summary:")
+        print(f"    Database:        {'OK' if db_ok else 'ISSUES'}")
+        print(f"    Authentication:  {'OK' if auth_ok else 'ISSUES'}")
+        all_ok = db_ok and auth_ok
+    else:
+        services_ok = check_docker_services()
+        print()
+        db_ok = check_database()
+        print()
+        auth_ok = check_auth()
+        print()
+        activity_ok = check_recent_activity()
+        print()
+        print("  Summary:")
+        print(f"    Docker services: {'OK' if services_ok else 'ISSUES'}")
+        print(f"    Database:        {'OK' if db_ok else 'ISSUES'}")
+        print(f"    Authentication:  {'OK' if auth_ok else 'ISSUES'}")
+        print(f"    Recent activity: {'OK' if activity_ok else 'STALE'}")
+        all_ok = services_ok and db_ok and auth_ok and activity_ok
 
     if args.troubleshoot or not all_ok:
         print_troubleshooting()
