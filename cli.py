@@ -7,11 +7,15 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from discord.webhook import DiscordWebhookError, send_message, send_png
 from gex import compute_exposure_report, compute_gex
 from gex.chart import generate_chart
 from gex.storage import (
     DEFAULT_DB_PATH,
+    _ph,
     get_connection,
     init_db,
     insert_aggregate_rows,
@@ -548,21 +552,23 @@ def run_gex_history(args: argparse.Namespace) -> None:
     connection = get_connection(args.db_path)
     try:
         init_db(connection)
-        rows = connection.execute(
-            """
+        ph = _ph(connection)
+        cur = connection.execute(
+            f"""
             SELECT id, symbol, captured_at, underlying_price, source
             FROM snapshots
-            WHERE symbol = ?
+            WHERE symbol = {ph}
             ORDER BY captured_at DESC
-            LIMIT ?
+            LIMIT {ph}
             """,
             (args.symbol.upper(), args.limit),
-        ).fetchall()
+        )
+        cols = [d[0] for d in cur.description]
+        rows = [dict(zip(cols, row)) for row in cur.fetchall()]
     finally:
         connection.close()
 
-    payload = [dict(row) for row in rows]
-    print(json.dumps(payload, indent=2, sort_keys=True))
+    print(json.dumps(rows, indent=2, sort_keys=True, default=str))
 
 
 def run_gex_chart(args: argparse.Namespace) -> None:
