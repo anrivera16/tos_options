@@ -43,6 +43,7 @@ services:
       - $$SPX
       - SPY
       - QQQ
+      - VIX
       - --interval
       - "5"
       - --db
@@ -89,6 +90,7 @@ services:
       - $$SPX
       - SPY
       - QQQ
+      - VIX
       - --db
       - postgresql://trader:${POSTGRES_PASSWORD:-changeme}@db:5432/options
     depends_on:
@@ -161,6 +163,28 @@ services:
       - --save
       - --interval
       - "30"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Sector scanner: bidirectional signals + sector positioning flow
+  # Runs every 5 min during market hours, posts to Discord
+  sector-scanner:
+    build: .
+    entrypoint: ["python"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://trader:changeme@db:5432/options
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
+    volumes:
+      - ${SCHWAB_TOKEN_DIR:-/Users/arivera/.schwabdev}:/root/.schwabdev
+      - .:/app
+    command:
+      - scripts/sector_scanner.py
+      - --interval
+      - "5"
+      - --discord
     depends_on:
       db:
         condition: service_healthy

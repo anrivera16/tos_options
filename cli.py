@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -504,12 +505,93 @@ def run_auth(args: argparse.Namespace) -> None:
         callback_url = input("Paste Schwab callback URL: ").strip()
 
     if callback_url:
-        client = create_client(call_on_auth=lambda _: callback_url)
-        client.update_tokens(force_refresh_token=True)
-        print("Authentication completed.")
+        _exchange_auth_code(callback_url)
         return
 
     print(build_authorize_url())
+
+
+def _exchange_auth_code(callback_url: str) -> None:
+    """Exchange an OAuth callback URL for fresh tokens, bypassing schwabdev init."""
+    import base64
+    import sqlite3
+    import urllib.parse
+    from datetime import datetime, timezone
+
+    import requests
+    from dotenv import load_dotenv
+
+    load_dotenv()
+    api_key = os.getenv("SCHWAB_API_KEY")
+    api_secret = os.getenv("SCHWAB_API_SECRET")
+    redirect_uri = os.getenv("SCHWAB_REDIRECT_URI")
+
+    parsed = urllib.parse.urlparse(callback_url)
+    params = urllib.parse.parse_qs(parsed.query)
+    code = urllib.parse.unquote(params.get("code", [None])[0])
+
+    if not code:
+        raise SystemExit("No authorization code found in callback URL.")
+
+    token_url = "https://api.schwabapi.com/v1/oauth/token"
+    credentials = base64.b64encode(f"{api_key}:{api_secret}".encode()).decode()
+
+    resp = requests.post(
+        token_url,
+        headers={
+            "Authorization": f"Basic {credentials}",
+            "Content-Type": "application/x-www-form-urlencoded",
+        },
+        data={
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": redirect_uri,
+        },
+    )
+
+    if resp.status_code != 200:
+        raise SystemExit(f"Token exchange failed ({resp.status_code}): {resp.text[:300]}")
+
+    tokens = resp.json()
+    if "access_token" not in tokens:
+        raise SystemExit(f"No access_token in response: {json.dumps(tokens)[:300]}")
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Save to schwabdev's tokens.db (SQLite)
+    db_path = Path.home() / ".schwabdev" / "tokens.db"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS schwabdev (
+            access_token_issued TEXT NOT NULL,
+            refresh_token_issued TEXT NOT NULL,
+            access_token TEXT NOT NULL,
+            refresh_token TEXT NOT NULL,
+            id_token TEXT NOT NULL,
+            expires_in INTEGER,
+            token_type TEXT,
+            scope TEXT
+        )"""
+    )
+    conn.execute("DELETE FROM schwabdev")
+    conn.execute(
+        "INSERT INTO schwabdev VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            now, now,
+            tokens.get("access_token", ""),
+            tokens.get("refresh_token", ""),
+            tokens.get("id_token", ""),
+            tokens.get("expires_in"),
+            tokens.get("token_type", ""),
+            tokens.get("scope", ""),
+        ),
+    )
+    conn.commit()
+    conn.close()
+    print(f"  Saved tokens to {db_path}")
+
+    print("Authentication completed successfully.")
 
 
 def run_quote(args: argparse.Namespace) -> None:
