@@ -24,7 +24,7 @@ from schwab.api import (
     get_option_chain_rows,
     get_quote,
 )
-from schwab.client import SchwabConfigError, build_authorize_url, create_client
+from schwab.client import SchwabConfigError, build_authorize_url, create_client, exchange_callback_for_tokens
 
 
 def main() -> None:
@@ -84,10 +84,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # ── Auth ──
     auth_parser = subparsers.add_parser("auth", help="Authentication commands")
-    auth_parser.add_argument("--callback-url", help="OAuth callback URL to exchange")
-    auth_parser.add_argument(
-        "--prompt", action="store_true", help="Read callback URL from stdin"
-    )
+    auth_parser.add_argument("--callback-url", help="OAuth callback URL to exchange (skips browser/prompt)")
     auth_parser.set_defaults(func=run_auth)
     auth_subparsers = auth_parser.add_subparsers(dest="auth_command")
 
@@ -95,10 +92,7 @@ def build_parser() -> argparse.ArgumentParser:
         "login", help="Print auth URL or exchange callback URL"
     )
     auth_login_parser.add_argument(
-        "--callback-url", help="OAuth callback URL to exchange"
-    )
-    auth_login_parser.add_argument(
-        "--prompt", action="store_true", help="Read callback URL from stdin"
+        "--callback-url", help="OAuth callback URL to exchange (skips browser/prompt)"
     )
     auth_login_parser.set_defaults(func=run_auth)
 
@@ -496,16 +490,16 @@ def _persist_snapshot(
 
 def run_auth(args: argparse.Namespace) -> None:
     callback_url = args.callback_url
-    if args.prompt and not callback_url:
-        callback_url = input("Paste Schwab callback URL: ").strip()
 
-    if callback_url:
-        client = create_client(call_on_auth=lambda _: callback_url)
-        client.update_tokens(force_refresh_token=True)
-        print("Authentication completed.")
-        return
+    if not callback_url:
+        auth_url = build_authorize_url()
+        print(f"Opening browser for Schwab login...\n{auth_url}")
+        import webbrowser
+        webbrowser.open(auth_url)
+        callback_url = input("Paste the callback URL from your browser: ").strip()
 
-    print(build_authorize_url())
+    exchange_callback_for_tokens(callback_url)
+    print("Authentication completed. Tokens saved to tokens.json.")
 
 
 def run_quote(args: argparse.Namespace) -> None:
