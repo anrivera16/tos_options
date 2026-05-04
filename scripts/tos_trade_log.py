@@ -210,18 +210,26 @@ print(separator)
 print()
 print("  In TOS: Analyze tab -> Add simulated trades, or use the Trade tab")
 print()
-print("  BULL PUT #1:")
-bp1 = scored["bull_put_credit"][0]
-print(f"    SELL -1 SPY {expiry_to_tos(bp1.short_leg.expiration_date)} {bp1.short_leg.strike:.0f} PUT")
-print(f"    BUY  +1 SPY {expiry_to_tos(bp1.long_leg.expiration_date)} {bp1.long_leg.strike:.0f} PUT")
-print(f"    Net credit: ${bp1.net_premium:.2f} | Breakeven: ${bp1.breakeven:.2f} | ROI: {bp1.roi_pct:.1f}%")
-print()
-print("  BEAR CALL #1:")
-bc1 = scored["bear_call_credit"][0]
-print(f"    SELL -1 SPY {expiry_to_tos(bc1.short_leg.expiration_date)} {bc1.short_leg.strike:.0f} CALL")
-print(f"    BUY  +1 SPY {expiry_to_tos(bc1.long_leg.expiration_date)} {bc1.long_leg.strike:.0f} CALL")
-print(f"    Net credit: ${bc1.net_premium:.2f} | Breakeven: ${bc1.breakeven:.2f} | ROI: {bc1.roi_pct:.1f}%")
-print()
+if scored["bull_put_credit"]:
+    bp1 = scored["bull_put_credit"][0]
+    print("  BULL PUT #1:")
+    print(f"    SELL -1 SPY {expiry_to_tos(bp1.short_leg.expiration_date)} {bp1.short_leg.strike:.0f} PUT")
+    print(f"    BUY  +1 SPY {expiry_to_tos(bp1.long_leg.expiration_date)} {bp1.long_leg.strike:.0f} PUT")
+    print(f"    Net credit: ${bp1.net_premium:.2f} | Breakeven: ${bp1.breakeven:.2f} | ROI: {bp1.roi_pct:.1f}%")
+    print()
+else:
+    print("  BULL PUT #1: no candidates")
+    print()
+if scored["bear_call_credit"]:
+    bc1 = scored["bear_call_credit"][0]
+    print("  BEAR CALL #1:")
+    print(f"    SELL -1 SPY {expiry_to_tos(bc1.short_leg.expiration_date)} {bc1.short_leg.strike:.0f} CALL")
+    print(f"    BUY  +1 SPY {expiry_to_tos(bc1.long_leg.expiration_date)} {bc1.long_leg.strike:.0f} CALL")
+    print(f"    Net credit: ${bc1.net_premium:.2f} | Breakeven: ${bc1.breakeven:.2f} | ROI: {bc1.roi_pct:.1f}%")
+    print()
+else:
+    print("  BEAR CALL #1: no candidates")
+    print()
 if ics:
     ic1 = ics[0]
     print("  IRON CONDOR #1:")
@@ -230,6 +238,8 @@ if ics:
     print(f"    SELL -1 SPY {expiry_to_tos(ic1.call_short.expiration_date)} {ic1.call_short.strike:.0f} CALL")
     print(f"    BUY  +1 SPY {expiry_to_tos(ic1.call_long.expiration_date)} {ic1.call_long.strike:.0f} CALL")
     print(f"    Total credit: ${ic1.total_credit:.2f} | Range: ${ic1.breakeven_low:.2f}-${ic1.breakeven_high:.2f} | ROI: {ic1.roi_pct:.1f}%")
+else:
+    print("  IRON CONDOR #1: no candidates")
 
 conn.close()
 print()

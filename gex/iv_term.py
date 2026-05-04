@@ -11,13 +11,16 @@ strike / delta bucket.  Useful for:
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 
-DEFAULT_DB = "postgresql://trader:changeme@localhost:5433/options"
+DEFAULT_DB = os.environ.get(
+    "DATABASE_URL", "postgresql://trader:changeme@localhost:5433/options"
+)
 
 
 def _connect(db_path: str):
