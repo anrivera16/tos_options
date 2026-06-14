@@ -1,0 +1,14 @@
+# Source registry — the one file you touch to add or retire a strategy.
+#
+# Keys are the SHORT source tags used in the signal_id slug (see signal_log.py
+# SOURCE_TAGS: swing_persistence→swing, directional_grader→grade, …).
+#   color   → the card's color on the board (hex).
+#   enabled → false parks a strategy: it stops surfacing NEW cards, but existing
+#             history and trade docs are untouched.
+#
+# Adding an experiment = one new line here. The board never changes.
+
+swing:  { label: "Swing Persistence", color: "#3b82f6", enabled: true }   # blue
+grade:  { label: "Directional Grade", color: "#22c55e", enabled: true }   # green
+gex:    { label: "GEX Gameplan",      color: "#a855f7", enabled: true }   # purple
+flow:   { label: "Nightly Flow",      color: "#f59e0b", enabled: false }  # amber — parked experiment

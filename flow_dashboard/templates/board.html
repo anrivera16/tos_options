@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trade Review Kanban</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='board.css') }}">
+</head>
+<body>
+  <header>
+    <h1>Trade Review</h1>
+    <span class="sub">nightly funnel · color = strategy</span>
+  </header>
+
+  <main class="board">
+
+    {# ---- Inbox: virtual cards, pass or promote ---- #}
+    <section class="column">
+      <div class="col-head">Inbox <span class="count">{{ counts.inbox }}</span></div>
+      <div class="cards">
+        {% for c in inbox %}
+        <article class="card" style="border-left-color: {{ c.color }}">
+          <div class="card-top">
+            <span class="tkr">{{ c.ticker }}</span>
+            <span class="side side-{{ c.side }}">{{ c.side }}</span>
+            {% if c.score is not none %}<span class="score">{{ '%.0f'|format(c.score) }}</span>{% endif %}
+          </div>
+          <div class="meta">
+            <span class="src" style="color: {{ c.color }}">{{ c.label }}</span>
+            {% if c.earnings %}<span class="warn">⚠ earn</span>{% endif %}
+            {% if c.sector %}<span class="sector">{{ c.sector }}</span>{% endif %}
+          </div>
+          {% for ct in c.contracts %}<div class="contract">{{ ct }}</div>{% endfor %}
+          <div class="actions">
+            <form method="post" action="{{ url_for('promote') }}">
+              <input type="hidden" name="card_id" value="{{ c.card_id }}">
+              <button class="btn promote">Promote</button>
+            </form>
+            <form method="post" action="{{ url_for('decide') }}">
+              <input type="hidden" name="card_id" value="{{ c.card_id }}">
+              <button class="btn pass">Pass</button>
+            </form>
+          </div>
+        </article>
+        {% else %}
+        <p class="empty">Inbox clear ✓</p>
+        {% endfor %}
+      </div>
+    </section>
+
+    {# ---- In-flight lanes: read from journal frontmatter ---- #}
+    {% for s in statuses %}
+    <section class="column">
+      <div class="col-head">{{ s|capitalize }} <span class="count">{{ counts[s] }}</span></div>
+      <div class="cards">
+        {% for c in flight[s] %}
+        <article class="card" style="border-left-color: {{ c.color }}">
+          <div class="card-top">
+            <span class="tkr">{{ c.ticker }}</span>
+            <span class="side side-{{ c.side }}">{{ c.side }}</span>
+            {% if c.score is not none %}<span class="score">{{ '%.0f'|format(c.score) }}</span>{% endif %}
+          </div>
+          <div class="meta">
+            <span class="src" style="color: {{ c.color }}">{{ c.label }}</span>
+            {% if c.opened %}<span class="sector">opened {{ c.opened }}</span>{% endif %}
+          </div>
+          <a class="doc-link" href="{{ url_for('doc', fname=c.card_id + '.md') }}" target="_blank">open doc →</a>
+          <div class="actions">
+            {% if s != 'watching' %}
+            <form method="post" action="{{ url_for('status') }}">
+              <input type="hidden" name="card_id" value="{{ c.card_id }}">
+              <input type="hidden" name="status" value="watching">
+              <button class="btn move">← Watch</button>
+            </form>{% endif %}
+            {% if s == 'watching' %}
+            <form method="post" action="{{ url_for('status') }}">
+              <input type="hidden" name="card_id" value="{{ c.card_id }}">
+              <input type="hidden" name="status" value="open">
+              <button class="btn move">Open →</button>
+            </form>{% endif %}
+            {% if s != 'closed' %}
+            <form method="post" action="{{ url_for('status') }}">
+              <input type="hidden" name="card_id" value="{{ c.card_id }}">
+              <input type="hidden" name="status" value="closed">
+              <button class="btn move">Close ✓</button>
+            </form>{% endif %}
+          </div>
+        </article>
+        {% else %}
+        <p class="empty">—</p>
+        {% endfor %}
+      </div>
+    </section>
+    {% endfor %}
+
+  </main>
+</body>
+</html>
